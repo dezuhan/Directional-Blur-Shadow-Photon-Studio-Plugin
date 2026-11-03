@@ -58,21 +58,35 @@ function fakeApi(options) {
 const tests = [];
 const test = (name, fn) => tests.push([name, fn]);
 
-test("planLayers ramps from endOpacity (far) to startOpacity (near)", () => {
-  const { params, layers } = Shadow.planLayers({ steps: 10, startOpacity: 100, endOpacity: 30 });
-  assert.equal(params.steps, 10);
-  assert.equal(layers.length, 10);
+test("planLayers defaults to 5 layers and eases the ramps", () => {
+  assert.equal(Shadow.DEFAULTS.steps, 5);
+  const { params, layers } = Shadow.planLayers({ steps: 5, distance: 150, blur: 26, startOpacity: 100, endOpacity: 5 });
+  assert.equal(params.steps, 5);
+  assert.equal(layers.length, 5);
   const far = layers[0];
   const near = layers[layers.length - 1];
-  assert.ok(Math.abs(far.target - 0.3) < 1e-9, "farthest layer targets end opacity");
-  // t runs from 1 (far) down to 1/steps (near), so the nearest layer lands one ramp step
-  // above endOpacity, not exactly on startOpacity.
-  assert.ok(Math.abs(near.target - (1 + (0.3 - 1) / 10)) < 1e-9, "near layer is one ramp step in");
-  assert.ok(near.target > far.target, "near layer is more opaque than the far one");
+  assert.ok(Math.abs(far.target - 0.05) < 1e-9, "farthest layer sits on endOpacity");
+  // t = 0.2 → target = 0.05 + 0.95 * (0.8)^2 = 0.658
+  assert.ok(Math.abs(near.target - 0.658) < 1e-3, "nearest layer sits on the eased ramp");
   assert.ok(far.blur > near.blur, "farther layers blur more");
   for (let index = 1; index < layers.length; index += 1) {
     assert.ok(layers[index].opacity >= layers[index - 1].opacity, "opacity grows towards the object");
   }
+});
+
+test("offsets and blur follow the Beautiful Shadows ramps", () => {
+  const { layers } = Shadow.planLayers({ steps: 5, distance: 150, blur: 26, angle: 0 });
+  const offsets = layers.map((layer) => Math.round(layer.dx));
+  assert.deepEqual(offsets, [150, 96, 54, 24, 6], "quadratic distance ramp (t^2 * 150)");
+  const blurs = layers.map((layer) => Math.round(layer.blur));
+  assert.deepEqual(blurs, [26, 22, 18, 14, 8], "blur eases with t^0.7");
+});
+
+test("direct mode uses the ramp value, composite mode normalises", () => {
+  const direct = Shadow.planLayers({ steps: 5, startOpacity: 100, endOpacity: 5 }, "direct").layers[0];
+  const composite = Shadow.planLayers({ steps: 5, startOpacity: 100, endOpacity: 5 }).layers[0];
+  assert.ok(Math.abs(direct.opacity - 0.05) < 1e-9, "direct mode keeps the ramp opacity");
+  assert.ok(composite.opacity < direct.opacity, "composite mode divides the load across layers");
 });
 
 test("step count does not darken the composite (Beer-Lambert normalisation)", () => {

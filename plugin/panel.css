@@ -117,6 +117,26 @@ input:focus-visible {
   touch-action: none;
 }
 
+.advanced {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid var(--sh-line);
+  padding-top: 8px;
+}
+
+.advanced > summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--sh-muted);
+}
+
+.advanced > summary::-webkit-details-marker {
+  display: none;
+}
+
 .debug {
   border-top: 1px solid var(--sh-line);
   padding-top: 6px;

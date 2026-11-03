@@ -31,7 +31,6 @@ const el = {
   status: document.getElementById("status"),
   meta: document.getElementById("meta"),
   previewCanvas: document.getElementById("previewCanvas"),
-  live: document.getElementById("live"),
   inspect: document.getElementById("inspect"),
   debugLog: document.getElementById("debugLog"),
 };
@@ -40,7 +39,6 @@ let api = null;
 let preview = null; // { layerIds, groupId, mode, effects } of the current preview
 let busy = false;
 let lastParams = { ...Shadow.DEFAULTS };
-let liveTimer = null;
 let dragging = false;
 
 function badge(text, kind) {
@@ -321,16 +319,6 @@ function handlePointer(event) {
   el.angle.value = String(vector.angle);
   el.distance.value = String(vector.distance);
   drawPreview();
-  scheduleLive(220);
-}
-
-function scheduleLive(delayMs) {
-  if (!el.live.checked) return;
-  if (liveTimer) clearTimeout(liveTimer);
-  liveTimer = setTimeout(() => {
-    liveTimer = null;
-    if (!busy) void runPreview();
-  }, delayMs === undefined ? 400 : delayMs);
 }
 
 async function inspectEffects() {
@@ -379,21 +367,15 @@ function wire() {
       if (dragging) handlePointer(event);
     });
     const stop = () => {
-      if (!dragging) return;
       dragging = false;
-      scheduleLive(60);
     };
     canvas.addEventListener("pointerup", stop);
     canvas.addEventListener("pointercancel", stop);
     canvas.addEventListener("pointerleave", stop);
   }
   for (const input of [el.angle, el.distance, el.steps, el.blur, el.colour, el.darkness, el.startOpacity, el.endOpacity, el.taperEnd]) {
-    input.addEventListener("input", () => {
-      drawPreview();
-      scheduleLive();
-    });
+    input.addEventListener("input", () => drawPreview());
   }
-  el.live.addEventListener("change", () => setStatus(el.live.checked ? "live update on" : "live update off"));
   el.inspect.addEventListener("click", () => void inspectEffects());
   el.preview.addEventListener("click", () => void runPreview());
   el.apply.addEventListener("click", () => void runApply());

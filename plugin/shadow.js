@@ -21,11 +21,11 @@
   const DEFAULTS = {
     angle: 30,
     distance: 150,
-    steps: 10,
-    blur: 25,
+    steps: 5,
+    blur: 26,
     colour: "#000000",
     startOpacity: 100,
-    endOpacity: 30,
+    endOpacity: 5,
     darkness: 100,
     taper: false,
     taperEnd: 90,
@@ -57,9 +57,21 @@
     };
   }
 
-  /** Per-layer plan, farthest first (index 0 = end of the shadow). Pure. */
-  function planLayers(input) {
+  /**
+   * Per-layer plan, farthest first (index 0 = end of the shadow). Pure.
+   *
+   * Ramps follow the "Beautiful Shadows" behaviour: the offset grows quadratically with the
+   * distance (2,6 / 10,24 / 22,55 / 39,97 / 61,152 for 5 layers), the blur eases with t^0.7 and
+   * the opacity falls off as (1 - t)^2 from startOpacity to endOpacity.
+   *
+   * opacityMode "direct"     → per-layer opacity is the ramp value (drop-shadow layer styles:
+   *                            each style renders independently, like the Figma plugin).
+   * opacityMode "composite"  → per-layer opacity is normalised for stacked copies
+   *                            (1 - (1 - target)^(1/steps)), see the Affinity port notes.
+   */
+  function planLayers(input, opacityMode) {
     const params = normalise(input);
+    const direct = opacityMode === "direct";
     const angleRad = (params.angle * Math.PI) / 180;
     const nx = Math.cos(angleRad);
     const ny = Math.sin(angleRad);
@@ -70,14 +82,16 @@
 
     for (let step = params.steps; step >= 1; step -= 1) {
       const t = step / params.steps;
-      const target = clamp(start + (end - start) * t, 0, 1);
-      const raw = 1 - Math.pow(1 - target, 1 / params.steps);
+      const easedDistance = t * t;
+      const easedBlur = Math.pow(t, 0.7);
+      const target = clamp(end + (start - end) * Math.pow(1 - t, 2), 0, 1);
+      const raw = direct ? target : 1 - Math.pow(1 - target, 1 / params.steps);
       layers.push({
         step,
         t,
-        dx: nx * params.distance * t,
-        dy: ny * params.distance * t,
-        blur: params.blur * t,
+        dx: nx * params.distance * easedDistance,
+        dy: ny * params.distance * easedDistance,
+        blur: Math.max(0.1, params.blur * easedBlur),
         target,
         opacity: Math.min(1, raw * darkness),
         perpScale: 1 + (params.taperEnd / 100 - 1) * t,
@@ -349,7 +363,7 @@
   async function buildWithEffects(api, options) {
     const documentId = options.documentId;
     const sourceLayerId = options.sourceLayerId;
-    const plan = planLayers(options.params);
+    const plan = planLayers(options.params, "direct");
     const onStep = options.onStep || (() => {});
     const doc = await api.documents.active();
 

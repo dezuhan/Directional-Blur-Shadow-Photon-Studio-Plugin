@@ -27,8 +27,8 @@
         <canvas id="previewCanvas" width="320" height="180" aria-label="Shadow direction preview"></canvas>
       </div>
       <p class="hint">
-        Drag the handle to point the shadow; the panel redraws instantly and (with live update) the
-        document follows.
+        Drag the handle to point the shadow. The preview redraws instantly; the document only
+        changes when you press Preview or Apply.
       </p>
 
       <div class="row">
@@ -45,11 +45,11 @@
       <div class="row">
         <div class="field">
           <label class="label" for="steps">Layers</label>
-          <input id="steps" class="input" type="number" min="3" max="30" step="1" value="10" />
+          <input id="steps" class="input" type="number" min="3" max="30" step="1" value="5" />
         </div>
         <div class="field">
-          <label class="label" for="blur">Max blur (px)</label>
-          <input id="blur" class="input" type="number" min="1" max="300" step="1" value="25" />
+          <label class="label" for="blur">Softness (px)</label>
+          <input id="blur" class="input" type="number" min="1" max="300" step="1" value="26" />
         </div>
       </div>
 
@@ -59,11 +59,13 @@
           <input id="colour" class="input colour" type="color" value="#000000" />
         </div>
         <div class="field">
-          <label class="label" for="darkness">Overall darkness (%)</label>
+          <label class="label" for="darkness">Lighting strength (%)</label>
           <input id="darkness" class="input" type="number" min="10" max="300" step="5" value="100" />
         </div>
       </div>
 
+      <details class="advanced">
+        <summary>Advanced</summary>
       <div class="row">
         <div class="field">
           <label class="label" for="startOpacity">Start opacity (%)</label>
@@ -71,7 +73,7 @@
         </div>
         <div class="field">
           <label class="label" for="endOpacity">End opacity (%)</label>
-          <input id="endOpacity" class="input" type="number" min="0" max="100" step="1" value="30" />
+          <input id="endOpacity" class="input" type="number" min="0" max="100" step="1" value="5" />
         </div>
       </div>
 
@@ -90,11 +92,8 @@
         <input type="checkbox" id="rasterize" checked />
         <span>Rasterize into one layer on Apply</span>
       </label>
+      </details>
 
-      <label class="check">
-        <input type="checkbox" id="live" checked />
-        <span>Live update while dragging</span>
-      </label>
 
       <div class="actions">
         <button id="preview" class="button" type="button">Preview</button>

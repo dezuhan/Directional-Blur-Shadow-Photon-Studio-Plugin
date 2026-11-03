@@ -14,15 +14,37 @@ selected layer in a chosen direction, blurring, fading and optionally tapering a
 | --- | --- | --- | --- |
 | Angle (°) | 0–360 | 30 | 0° = right, 90° = down (clockwise on screen) |
 | Distance (px) | 1–2000 | 150 | How far the shadow travels from the layer |
-| Layers | 3–30 | 10 | Number of stacked copies; more = smoother, never darker |
-| Max blur (px) | 1–300 | 25 | Blur at the far end of the shadow |
+| Layers | 3–30 | **5** | Number of stacked shadows (Beautiful Shadows uses 5) |
+| Softness (px) | 1–300 | **26** | Blur at the far end of the shadow |
 | Colour | hex | #000000 | Silhouette colour |
-| Overall darkness (%) | 10–300 | 100 | Multiplies the whole falloff |
+| Lighting strength (%) | 10–300 | 100 | Multiplies the whole falloff |
 | Start opacity (%) | 1–100 | 100 | Opacity target nearest the layer |
-| End opacity (%) | 0–100 | 30 | Opacity target at the far end |
+| End opacity (%) | 0–100 | **5** | Opacity target at the far end |
 | Taper (narrow/expand) | on/off | off | Scales each copy perpendicular to the direction |
 | Size at tip (%) | 1–500 | 90 | Taper amount at the far end |
 | Rasterize into one layer | on/off | on | Applied only when you press Apply |
+
+## Ramps (matching Beautiful Shadows)
+
+The defaults reproduce the Figma plugin's 5-shadow ramp:
+
+| Layer | Offset (px) | Blur (px) | Opacity |
+| --- | --- | --- | --- |
+| 1 (far) | 150 | 26 | 5% |
+| 2 | 96 | 22 | 14% |
+| 3 | 54 | 18 | 34% |
+| 4 | 24 | 14 | 62% |
+| 5 (near) | 6 | 8 | 100% |
+
+Offset grows with `t²`, blur with `t^0.7`, opacity with `(1 − t)²` (t = 1 at the far end).
+Drop-shadow layer styles use the ramp value directly; the copies mode still normalises each
+layer's opacity for alpha-over compositing.
+
+## Preview, not live document edits
+
+The canvas preview updates instantly while you drag or type, but **the document is only changed
+when you press Preview or Apply** — no silent rebuilding while dragging. Press
+**Remove preview** to delete the preview layer.
 
 ## Realtime direction preview
 
@@ -95,6 +117,18 @@ from that. The shadow therefore lands directly behind the subject in either conv
   preview on screen leaves it behind — press **Remove preview** first.
 
 ## Changelog
+
+### 0.4.0
+
+- Defaults now match Beautiful Shadows: **5 layers**, distance 150 px, softness 26 px,
+  start/end opacity 100/5 %, lighting strength 100 %.
+- Eased ramps: offset `t²`, blur `t^0.7`, opacity `(1 − t)²` — the stacked shadows now read as one
+  soft gradient instead of separate copies.
+- The canvas preview no longer rebuilds the document while dragging; the document changes only on
+  **Preview** or **Apply**.
+- UI simplified: Lighting strength replaces "Overall darkness", Softness replaces "Max blur", and
+  the opacity/taper/rasterize options live under **Advanced**.
+- Tests grew to 20 (5-layer default, ramp offsets/blur, direct vs composite opacity).
 
 ### 0.3.0
 
