@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Directional Shadow</title>
+    <link rel="stylesheet" href="panel.css" />
+  </head>
+  <body>
+    <main class="panel">
+      <header class="panel-head">
+        <h1 class="title">Directional Shadow</h1>
+        <span id="badge" class="badge ok">Ready</span>
+      </header>
+
+      <div class="row">
+        <div class="field">
+          <label class="label" for="angle">Angle (°)</label>
+          <input id="angle" class="input" type="number" min="0" max="360" step="1" value="30" />
+        </div>
+        <div class="field">
+          <label class="label" for="distance">Distance (px)</label>
+          <input id="distance" class="input" type="number" min="1" max="2000" step="1" value="150" />
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label class="label" for="steps">Layers</label>
+          <input id="steps" class="input" type="number" min="3" max="30" step="1" value="10" />
+        </div>
+        <div class="field">
+          <label class="label" for="blur">Max blur (px)</label>
+          <input id="blur" class="input" type="number" min="1" max="300" step="1" value="25" />
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label class="label" for="colour">Colour</label>
+          <input id="colour" class="input colour" type="color" value="#000000" />
+        </div>
+        <div class="field">
+          <label class="label" for="darkness">Overall darkness (%)</label>
+          <input id="darkness" class="input" type="number" min="10" max="300" step="5" value="100" />
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label class="label" for="startOpacity">Start opacity (%)</label>
+          <input id="startOpacity" class="input" type="number" min="1" max="100" step="1" value="100" />
+        </div>
+        <div class="field">
+          <label class="label" for="endOpacity">End opacity (%)</label>
+          <input id="endOpacity" class="input" type="number" min="0" max="100" step="1" value="30" />
+        </div>
+      </div>
+
+      <div class="section">
+        <label class="check">
+          <input type="checkbox" id="taper" />
+          <span>Taper (narrow / expand)</span>
+        </label>
+        <div class="field indent">
+          <label class="label" for="taperEnd">Size at tip (%)</label>
+          <input id="taperEnd" class="input" type="number" min="1" max="500" step="5" value="90" disabled />
+        </div>
+      </div>
+
+      <label class="check">
+        <input type="checkbox" id="rasterize" checked />
+        <span>Rasterize into one layer on Apply</span>
+      </label>
+
+      <div class="actions">
+        <button id="preview" class="button" type="button">Preview</button>
+        <button id="apply" class="button cancel" type="button">Apply</button>
+      </div>
+      <div class="actions">
+        <button id="removePreview" class="button quiet" type="button" hidden>Remove preview</button>
+      </div>
+
+      <p id="hint" class="hint">
+        Select one layer, then Preview. Apply keeps the result behind the subject as a group named
+        “Directional Blur Shadow”.
+      </p>
+
+      <footer class="panel-footer">
+        <span id="status">idle</span>
+        <span id="meta" class="hint"></span>
+      </footer>
+    </main>
+
+    <script src="shadow.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

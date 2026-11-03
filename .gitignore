@@ -1,0 +1,15 @@
+﻿# OS noise
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
+
+# Node (only used by the headless tests)
+node_modules/
+
+# Local artefacts
+*.log
+tools/out/
