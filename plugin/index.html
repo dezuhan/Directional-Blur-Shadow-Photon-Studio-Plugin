@@ -23,6 +23,14 @@
         </p>
       </div>
 
+      <div class="preview-box">
+        <canvas id="previewCanvas" width="320" height="180" aria-label="Shadow direction preview"></canvas>
+      </div>
+      <p class="hint">
+        Drag the handle to point the shadow; the panel redraws instantly and (with live update) the
+        document follows.
+      </p>
+
       <div class="row">
         <div class="field">
           <label class="label" for="angle">Angle (°)</label>
@@ -83,6 +91,11 @@
         <span>Rasterize into one layer on Apply</span>
       </label>
 
+      <label class="check">
+        <input type="checkbox" id="live" checked />
+        <span>Live update while dragging</span>
+      </label>
+
       <div class="actions">
         <button id="preview" class="button" type="button">Preview</button>
         <button id="apply" class="button cancel" type="button">Apply</button>
@@ -95,6 +108,14 @@
         Select one layer, then Preview. Apply keeps the result behind the subject as a group named
         “Directional Blur Shadow”.
       </p>
+
+      <details class="debug">
+        <summary>Diagnostics</summary>
+        <div class="actions">
+          <button id="inspect" class="button quiet" type="button">Inspect effect parameters</button>
+        </div>
+        <pre id="debugLog" class="debug-log"></pre>
+      </details>
 
       <footer class="panel-footer">
         <span id="status">idle</span>

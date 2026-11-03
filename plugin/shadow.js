@@ -248,22 +248,52 @@
         if (!entry) continue;
         const name = entry.name || entry.key || entry.id;
         if (!name) continue;
-        map.set(String(name).toLowerCase(), { name: String(name), value: entry.default });
+        map.set(String(name).toLowerCase(), {
+          name: String(name),
+          value: entry.default,
+          type: entry.type,
+          unit: entry.unit,
+          min: entry.min,
+          max: entry.max,
+        });
       }
     } else if (payload && typeof payload === "object") {
       for (const [name, value] of Object.entries(payload)) {
-        map.set(String(name).toLowerCase(), { name, value });
+        const meta = value && typeof value === "object" && "default" in value ? value : { default: value };
+        map.set(String(name).toLowerCase(), {
+          name,
+          value: meta.default,
+          type: meta.type,
+          unit: meta.unit,
+          min: meta.min,
+          max: meta.max,
+        });
       }
     }
     return map;
   }
 
-  /** Pick the first available parameter whose name matches the pattern. */
-  function pickParam(map, pattern) {
-    for (const [key, entry] of map) {
-      if (pattern.test(key)) return entry.name;
+  /** Pick the first available parameter matching one of the patterns, in priority order. */
+  function pickParam(map, patterns) {
+    const list = Array.isArray(patterns) ? patterns : [patterns];
+    for (const pattern of list) {
+      for (const [key, entry] of map) {
+        if (pattern.test(key)) return entry.name;
+      }
     }
     return null;
+  }
+
+  /** Convert a drag vector into { angle, distance } for the direction handle. */
+  function vectorToAngleDistance(dx, dy, maxDistance) {
+    const distance = Math.hypot(dx, dy);
+    let angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+    if (angle < 0) angle += 360;
+    const limit = Number(maxDistance) || 2000;
+    return {
+      angle: Math.round(angle * 10) / 10,
+      distance: Math.max(1, Math.min(limit, Math.round(distance * 10) / 10)),
+    };
   }
 
   /**
@@ -298,7 +328,8 @@
     };
     set(/^(angle|direction)$/, params.angle);
     set(/distance|offset/, entry.distance !== undefined ? entry.distance : Math.hypot(entry.dx || 0, entry.dy || 0));
-    set(/^(size|blur|radius)/, Math.max(0.1, entry.blur));
+    // A soft shadow needs the blur radius: try the explicit blur names first, "size" last.
+    set([/blur/, /radius/, /softness/, /^size$/], Math.max(0.1, entry.blur));
     set(/opacity/, Math.max(0.001, entry.opacity));
     set(/colou?r/, rgba(params.colour));
     set(/blend/, "normal");
@@ -384,5 +415,6 @@
     removeShadow,
     describeToMap,
     effectParams,
+    vectorToAngleDistance,
   };
 });

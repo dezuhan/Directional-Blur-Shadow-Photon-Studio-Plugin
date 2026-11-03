@@ -98,6 +98,57 @@ input:focus-visible {
   border-radius: 26px;
 }
 
+.preview-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border-radius: var(--sh-radius);
+  background: var(--ph-black-3, rgba(0, 0, 0, 0.25));
+  box-shadow: var(--sh-hairline);
+}
+
+#previewCanvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 170px;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.debug {
+  border-top: 1px solid var(--sh-line);
+  padding-top: 6px;
+  font-size: 10px;
+  color: var(--sh-muted);
+}
+
+.debug > summary {
+  cursor: pointer;
+  list-style: none;
+  font-weight: 600;
+}
+
+.debug > summary::-webkit-details-marker {
+  display: none;
+}
+
+.debug-log {
+  margin: 5px 0 0;
+  max-height: 120px;
+  overflow: auto;
+  padding: 6px;
+  border-radius: var(--sh-radius);
+  background: var(--ph-black-3, rgba(0, 0, 0, 0.3));
+  color: var(--sh-muted);
+  font-family: inherit;
+  font-size: 10px;
+  line-height: 14px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .panel-head {
   display: flex;
   align-items: center;

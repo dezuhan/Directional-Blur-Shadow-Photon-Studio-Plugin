@@ -24,6 +24,19 @@ selected layer in a chosen direction, blurring, fading and optionally tapering a
 | Size at tip (%) | 1–500 | 90 | Taper amount at the far end |
 | Rasterize into one layer | on/off | on | Applied only when you press Apply |
 
+## Realtime direction preview
+
+The panel draws its own preview on a canvas using the same maths as the document build:
+
+- every shadow step is painted with `blur(radius × scale)` and the per-step opacity, so you see a
+  soft stack instead of hard copies;
+- the handle at the end of the line can be **dragged** to set angle and distance
+  (`vectorToAngleDistance`), and the inputs update live;
+- with **Live update** on, dragging the handle also rebuilds the document preview (debounced
+  ~220 ms) so the real shadow follows your hand;
+- **Diagnostics → Inspect effect parameters** dumps the host's real `dropShadow` parameter names,
+  which is how the effect mapping is verified on a given Photon build.
+
 ## Two build modes
 
 | Mode | What it builds | Pros | Cons |
@@ -82,6 +95,18 @@ from that. The shadow therefore lands directly behind the subject in either conv
   preview on screen leaves it behind — press **Remove preview** first.
 
 ## Changelog
+
+### 0.3.0
+
+- **Interactive direction preview**: a canvas in the panel paints the soft stack (real blur and
+  per-step opacity), with a draggable handle that sets angle and distance.
+- **Live update** rebuilds the document preview while dragging (debounced), so the shadow follows
+  the handle in Photon.
+- Softness fix: the effect mapping now prefers an explicit `blur`/`radius` parameter over `size`,
+  which is what made the first builds look like hard stacked copies.
+- **Diagnostics → Inspect effect parameters** prints the host's real `dropShadow` parameter names
+  and values, so the mapping can be checked on any Photon version.
+- Tests grew to 18 (drag vector maths, blur-over-size priority).
 
 ### 0.2.0
 

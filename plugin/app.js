@@ -30,12 +30,18 @@ const el = {
   hint: document.getElementById("hint"),
   status: document.getElementById("status"),
   meta: document.getElementById("meta"),
+  previewCanvas: document.getElementById("previewCanvas"),
+  live: document.getElementById("live"),
+  inspect: document.getElementById("inspect"),
+  debugLog: document.getElementById("debugLog"),
 };
 
 let api = null;
 let preview = null; // { layerIds, groupId, mode, effects } of the current preview
 let busy = false;
 let lastParams = { ...Shadow.DEFAULTS };
+let liveTimer = null;
+let dragging = false;
 
 function badge(text, kind) {
   el.badge.textContent = text;
@@ -148,6 +154,7 @@ async function runPreview() {
     setStatus(mode === "effects" ? "adding " + lastParams.steps + " drop shadows…" : "building " + lastParams.steps + " layers…");
     preview = await buildFor(doc, layerId, lastParams, mode);
     preview.mode = mode;
+    drawPreview();
     badge("Preview", "busy");
     setStatus(
       mode === "effects"
@@ -213,6 +220,140 @@ async function runRemovePreview() {
   }
 }
 
+/* ---------- direction preview (canvas) ---------- */
+
+const CARD = { width: 112, height: 82 };
+const SCALE = 0.42;
+
+function canvasCentre() {
+  return { x: el.previewCanvas.width / 2, y: el.previewCanvas.height / 2 };
+}
+
+function roundRect(ctx, x, y, width, height, radius) {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + width, y, x + width, y + height, r);
+  ctx.arcTo(x + width, y + height, x, y + height, r);
+  ctx.arcTo(x, y + height, x, y, r);
+  ctx.arcTo(x, y, x + width, y, r);
+  ctx.closePath();
+}
+
+function drawPreview() {
+  const canvas = el.previewCanvas;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  const params = readParams();
+  const plan = Shadow.planLayers(params);
+  const centre = canvasCentre();
+
+  // Light "paper" so a dark shadow is actually visible (the panel ground is near-black).
+  ctx.save();
+  ctx.fillStyle = "#eae7e1";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = "rgba(0,0,0,0.12)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(0.5, 0.5, canvas.width - 1, canvas.height - 1);
+  ctx.restore();
+
+  // shadow layers: far → near, each one blurred and semi transparent
+  for (const layer of plan.layers) {
+    const alpha = Math.min(1, layer.opacity);
+    const hex = params.colour.replace("#", "");
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    ctx.save();
+    ctx.filter = "blur(" + Math.max(0.5, layer.blur * SCALE) + "px)";
+    ctx.fillStyle = "rgba(" + r + "," + g + "," + b + "," + alpha.toFixed(3) + ")";
+    roundRect(
+      ctx,
+      centre.x - CARD.width / 2 + layer.dx * SCALE,
+      centre.y - CARD.height / 2 + layer.dy * SCALE,
+      CARD.width,
+      CARD.height,
+      10,
+    );
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // the object itself
+  ctx.save();
+  ctx.fillStyle = "#f7f7f7";
+  roundRect(ctx, centre.x - CARD.width / 2, centre.y - CARD.height / 2, CARD.width, CARD.height, 10);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(0,0,0,0.18)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.restore();
+
+  // direction handle
+  const reach = Math.min(64, Math.max(12, params.distance * SCALE));
+  const angleRad = (params.angle * Math.PI) / 180;
+  const hx = centre.x + Math.cos(angleRad) * reach;
+  const hy = centre.y + Math.sin(angleRad) * reach;
+  ctx.save();
+  ctx.strokeStyle = "rgba(43,108,246,0.55)";
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(centre.x, centre.y);
+  ctx.lineTo(hx, hy);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(hx, hy, 6, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(43,108,246,0.18)";
+  ctx.fill();
+  ctx.strokeStyle = "#2b6cf6";
+  ctx.lineWidth = 1.8;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function handlePointer(event) {
+  const canvas = el.previewCanvas;
+  const rect = canvas.getBoundingClientRect();
+  const x = ((event.clientX - rect.left) / rect.width) * canvas.width;
+  const y = ((event.clientY - rect.top) / rect.height) * canvas.height;
+  const centre = canvasCentre();
+  const vector = Shadow.vectorToAngleDistance((x - centre.x) / SCALE, (y - centre.y) / SCALE, 2000);
+  el.angle.value = String(vector.angle);
+  el.distance.value = String(vector.distance);
+  drawPreview();
+  scheduleLive(220);
+}
+
+function scheduleLive(delayMs) {
+  if (!el.live.checked) return;
+  if (liveTimer) clearTimeout(liveTimer);
+  liveTimer = setTimeout(() => {
+    liveTimer = null;
+    if (!busy) void runPreview();
+  }, delayMs === undefined ? 400 : delayMs);
+}
+
+async function inspectEffects() {
+  el.badge.textContent = "Inspecting…";
+  el.badge.className = "badge busy";
+  try {
+    const doc = await api.documents.active();
+    if (!doc) throw new Error("No active document.");
+    const described = await api.documents.execute("effect.describe", { kind: "dropShadow" }, doc.id);
+    const names = [...Shadow.describeToMap(described).keys()];
+    el.debugLog.textContent =
+      "dropShadow parameters: " + names.join(", ") + "\n\n" + JSON.stringify(described, null, 1);
+    el.badge.textContent = "Ready";
+    el.badge.className = "badge ok";
+    setStatus("inspected " + names.length + " parameter(s)");
+  } catch (error) {
+    el.debugLog.textContent = "effect.describe failed: " + errText(error);
+    el.badge.textContent = "Failed";
+    el.badge.className = "badge danger";
+    setStatus("inspect failed");
+  }
+}
+
 function wire() {
   el.taper.addEventListener("change", () => {
     el.taperEnd.disabled = !el.taper.checked || readMode() === "effects";
@@ -227,6 +368,33 @@ function wire() {
       : "N duplicated layers: supports taper, rasterize optional.";
     setStatus(effects ? "effects mode" : "copies mode");
   });
+  const canvas = el.previewCanvas;
+  if (canvas) {
+    canvas.addEventListener("pointerdown", (event) => {
+      dragging = true;
+      if (canvas.setPointerCapture) canvas.setPointerCapture(event.pointerId);
+      handlePointer(event);
+    });
+    canvas.addEventListener("pointermove", (event) => {
+      if (dragging) handlePointer(event);
+    });
+    const stop = () => {
+      if (!dragging) return;
+      dragging = false;
+      scheduleLive(60);
+    };
+    canvas.addEventListener("pointerup", stop);
+    canvas.addEventListener("pointercancel", stop);
+    canvas.addEventListener("pointerleave", stop);
+  }
+  for (const input of [el.angle, el.distance, el.steps, el.blur, el.colour, el.darkness, el.startOpacity, el.endOpacity, el.taperEnd]) {
+    input.addEventListener("input", () => {
+      drawPreview();
+      scheduleLive();
+    });
+  }
+  el.live.addEventListener("change", () => setStatus(el.live.checked ? "live update on" : "live update off"));
+  el.inspect.addEventListener("click", () => void inspectEffects());
   el.preview.addEventListener("click", () => void runPreview());
   el.apply.addEventListener("click", () => void runApply());
   el.removePreview.addEventListener("click", () => void runRemovePreview());
@@ -242,6 +410,7 @@ async function init() {
   applyParamsToUi(Shadow.normalise({ ...Shadow.DEFAULTS, ...(stored.shadow || {}) }));
   badge("Ready", "ok");
   setStatus("select a layer, then Preview");
+  drawPreview();
   await markPreview();
 }
 

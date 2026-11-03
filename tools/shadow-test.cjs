@@ -321,6 +321,37 @@ test("buildWithEffects still works when describe fails", async () => {
   assert.ok("size" in effects[0].params.params);
 });
 
+
+test("vectorToAngleDistance maps a drag to angle and distance", () => {
+  const right = Shadow.vectorToAngleDistance(100, 0, 2000);
+  assert.equal(right.angle, 0);
+  assert.equal(right.distance, 100);
+  const down = Shadow.vectorToAngleDistance(0, 50, 2000);
+  assert.equal(down.angle, 90);
+  assert.equal(down.distance, 50);
+  const upLeft = Shadow.vectorToAngleDistance(-10, -10, 2000);
+  assert.equal(upLeft.angle, 225);
+  assert.ok(Math.abs(upLeft.distance - Math.hypot(10, 10)) < 0.1, "distance is rounded to 0.1");
+  const clamped = Shadow.vectorToAngleDistance(5000, 0, 150);
+  assert.equal(clamped.distance, 150);
+});
+
+test("effectParams prefers an explicit blur parameter over size", () => {
+  const described = {
+    params: [
+      { name: "blur", default: 4 },
+      { name: "size", default: 4 },
+      { name: "distance", default: 5 },
+      { name: "opacity", default: 0.7 },
+      { name: "angle", default: 120 },
+      { name: "color", default: { space: "rgb", r: 0, g: 0, b: 0, a: 1 } },
+    ],
+  };
+  const out = Shadow.effectParams(described, { distance: 30, blur: 17, opacity: 0.5 }, { angle: 45, colour: "#000000" });
+  assert.equal(out.blur, 17, "blur is used for softness");
+  assert.equal(out.size, undefined, "size is not touched when blur exists");
+});
+
 (async () => {
   let failed = 0;
   for (const [name, fn] of tests) {
