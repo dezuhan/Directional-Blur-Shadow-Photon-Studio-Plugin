@@ -185,6 +185,18 @@ input:focus-visible {
   opacity: 0.5;
 }
 
+select.input {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 8px;
+  cursor: pointer;
+}
+
+select.input option {
+  background: var(--ph-black-5, #151515);
+  color: var(--sh-text);
+}
+
 .input.colour {
   padding: 2px 4px;
   height: var(--sh-control-height);

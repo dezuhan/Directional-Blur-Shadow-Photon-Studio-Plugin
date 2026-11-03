@@ -12,6 +12,17 @@
         <span id="badge" class="badge ok">Ready</span>
       </header>
 
+      <div class="field">
+        <label class="label" for="mode">Mode</label>
+        <select id="mode" class="input">
+          <option value="effects" selected>Layer styles — 1 layer, N drop shadows</option>
+          <option value="copies">Layer copies — N layers, supports taper</option>
+        </select>
+        <p id="modeHint" class="hint">
+          Layer styles stay editable in Photon's Layer Style panel; copies allow taper.
+        </p>
+      </div>
+
       <div class="row">
         <div class="field">
           <label class="label" for="angle">Angle (°)</label>

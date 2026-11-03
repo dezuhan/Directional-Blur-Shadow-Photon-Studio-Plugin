@@ -3,14 +3,17 @@
   "sdkVersion": 1,
   "id": "photon-directional-shadow",
   "name": "Directional Shadow",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "main": "index.html",
   "panels": [
     {
       "id": "shadow",
       "label": "Directional Shadow",
       "ui": "custom",
-      "minimumSize": { "width": 340, "height": 520 }
+      "minimumSize": {
+        "width": 340,
+        "height": 520
+      }
     }
   ],
   "commands": [
@@ -21,7 +24,13 @@
       "panel": "shadow",
       "menu": "Plugins",
       "binding": "Ctrl+Shift+D",
-      "keywords": ["shadow", "blur", "directional", "drop shadow", "affinity"]
+      "keywords": [
+        "shadow",
+        "blur",
+        "directional",
+        "drop shadow",
+        "affinity"
+      ]
     }
   ],
   "permissions": {

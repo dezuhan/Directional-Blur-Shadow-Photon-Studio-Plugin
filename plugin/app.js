@@ -11,6 +11,8 @@ const Shadow = globalThis.PhotonShadow;
 
 const el = {
   badge: document.getElementById("badge"),
+  mode: document.getElementById("mode"),
+  modeHint: document.getElementById("modeHint"),
   angle: document.getElementById("angle"),
   distance: document.getElementById("distance"),
   steps: document.getElementById("steps"),
@@ -31,7 +33,7 @@ const el = {
 };
 
 let api = null;
-let preview = null; // { layerIds, groupId } of the current preview
+let preview = null; // { layerIds, groupId, mode, effects } of the current preview
 let busy = false;
 let lastParams = { ...Shadow.DEFAULTS };
 
@@ -46,6 +48,10 @@ function setStatus(text) {
 
 function errText(error) {
   return String((error && error.message) || error || "unknown error");
+}
+
+function readMode() {
+  return el.mode.value === "copies" ? "copies" : "effects";
 }
 
 function readParams() {
@@ -85,6 +91,23 @@ function setBusy(value) {
   el.removePreview.disabled = value;
 }
 
+async function buildFor(doc, layerId, params, mode) {
+  if (mode === "effects") {
+    return Shadow.buildWithEffects(api, {
+      documentId: doc.id,
+      sourceLayerId: layerId,
+      params,
+      onStep: (done, total) => setStatus("shadow " + done + " / " + total),
+    });
+  }
+  return Shadow.buildShadow(api, {
+    documentId: doc.id,
+    sourceLayerId: layerId,
+    params: { ...params, rasterize: false },
+    onStep: (done, total) => setStatus("layer " + done + " / " + total),
+  });
+}
+
 async function selectedLayer() {
   const doc = await api.documents.active();
   if (!doc) throw new Error("No active document. Open an image in Photon first.");
@@ -121,15 +144,16 @@ async function runPreview() {
     lastParams = readParams();
     await dropPreview();
     const { doc, layerId } = await selectedLayer();
-    setStatus("building " + lastParams.steps + " layers…");
-    preview = await Shadow.buildShadow(api, {
-      documentId: doc.id,
-      sourceLayerId: layerId,
-      params: lastParams,
-      onStep: (done, total) => setStatus("layer " + done + " / " + total),
-    });
+    const mode = readMode();
+    setStatus(mode === "effects" ? "adding " + lastParams.steps + " drop shadows…" : "building " + lastParams.steps + " layers…");
+    preview = await buildFor(doc, layerId, lastParams, mode);
+    preview.mode = mode;
     badge("Preview", "busy");
-    setStatus("preview ready — Apply to keep it");
+    setStatus(
+      mode === "effects"
+        ? "preview ready — " + preview.effects + " drop shadows on one layer"
+        : "preview ready — Apply to keep it",
+    );
     await markPreview();
   } catch (error) {
     badge("Failed", "danger");
@@ -147,17 +171,14 @@ async function runApply() {
     lastParams = readParams();
     const { doc, layerId } = await selectedLayer();
 
+    const mode = readMode();
     if (!preview) {
-      setStatus("building " + lastParams.steps + " layers…");
-      preview = await Shadow.buildShadow(api, {
-        documentId: doc.id,
-        sourceLayerId: layerId,
-        params: lastParams,
-        onStep: (done, total) => setStatus("layer " + done + " / " + total),
-      });
+      setStatus(mode === "effects" ? "adding " + lastParams.steps + " drop shadows…" : "building " + lastParams.steps + " layers…");
+      preview = await buildFor(doc, layerId, lastParams, mode);
+      preview.mode = mode;
     }
 
-    if (lastParams.rasterize && preview.groupId) {
+    if (mode === "copies" && lastParams.rasterize && preview.groupId) {
       setStatus("rasterizing…");
       await api.documents.execute(
         "layer.rasterize",
@@ -194,7 +215,17 @@ async function runRemovePreview() {
 
 function wire() {
   el.taper.addEventListener("change", () => {
-    el.taperEnd.disabled = !el.taper.checked;
+    el.taperEnd.disabled = !el.taper.checked || readMode() === "effects";
+  });
+  el.mode.addEventListener("change", () => {
+    const effects = readMode() === "effects";
+    el.rasterize.disabled = effects;
+    el.taper.disabled = false;
+    el.taperEnd.disabled = effects || !el.taper.checked;
+    el.modeHint.textContent = effects
+      ? "One layer with N drop shadows: editable in the Layer Style panel, no taper."
+      : "N duplicated layers: supports taper, rasterize optional.";
+    setStatus(effects ? "effects mode" : "copies mode");
   });
   el.preview.addEventListener("click", () => void runPreview());
   el.apply.addEventListener("click", () => void runApply());

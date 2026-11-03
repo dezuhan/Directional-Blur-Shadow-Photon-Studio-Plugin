@@ -24,6 +24,19 @@ selected layer in a chosen direction, blurring, fading and optionally tapering a
 | Size at tip (%) | 1–500 | 90 | Taper amount at the far end |
 | Rasterize into one layer | on/off | on | Applied only when you press Apply |
 
+## Two build modes
+
+| Mode | What it builds | Pros | Cons |
+| --- | --- | --- | --- |
+| **Layer styles** (default) | One duplicate layer whose `fillOpacity` is 0, carrying **N `dropShadow` layer effects** (appended via `layer.effect.set` with increasing `index`) | Stays editable in Photon's **Layer Style** panel, one extra layer only, effects scale with the layer | Taper is not expressible as an effect |
+| **Layer copies** | N duplicated layers, each filled, blurred and faded | Full control incl. **taper** | More layers; rasterize on Apply to flatten |
+
+`layer.effect.set` documents `index` as "defaults to zero and may equal the current count to
+append", so several drop shadows of the same kind can coexist on one layer — that is what makes
+the effects mode possible. The plugin reads the real parameter names from
+`effect.describe({kind:"dropShadow"})` at runtime and falls back to canonical names when the host
+does not answer.
+
 ## How it maps to Photon operations
 
 | Affinity (JSX) | Photon plugin operation |
@@ -67,6 +80,19 @@ from that. The shadow therefore lands directly behind the subject in either conv
   than the other steps do.
 - The preview lives in the document until you Apply or Remove it. Closing the panel with a
   preview on screen leaves it behind — press **Remove preview** first.
+
+## Changelog
+
+### 0.2.0
+
+- New **Layer styles** mode: the shadow is built from N `dropShadow` layer effects stacked on one
+  hidden-copy layer (`fillOpacity: 0`), instead of N duplicated layers. Result stays editable in
+  Photon's Layer Style panel and keeps the layer stack clean.
+- Effect parameter names are discovered at runtime with `effect.describe`, with a canonical
+  fallback, so the plugin still works if the host does not answer.
+- Mode selector in the panel; taper and rasterize are only offered in **Layer copies** mode
+  (taper cannot be expressed as a drop shadow effect).
+- Tests grew to 16 (describe parsing, parameter mapping, effects pipeline order and indices).
 
 ## Testing
 

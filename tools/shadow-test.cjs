@@ -210,6 +210,117 @@ test("removeShadow tolerates a missing layer", async () => {
   await Shadow.removeShadow(api, "doc-1", ["x"], null);
 });
 
+
+/* --------------------------------------------------------------- effects mode */
+
+function effectsApi(described) {
+  const calls = [];
+  let duplicateCount = 0;
+  const layers = [{ id: "src" }, { id: "bg" }];
+  const api = {
+    calls,
+    documents: {
+      active: async () => ({ id: "doc-1", width: 800, height: 600, layers: layers.map((l) => ({ ...l })) }),
+      execute: async (operation, params) => {
+        calls.push({ operation, params });
+        if (operation === "effect.describe") return described;
+        if (operation === "layer.duplicate") {
+          duplicateCount += 1;
+          const id = "fx" + duplicateCount;
+          layers.unshift({ id });
+          return { layerIds: [id] };
+        }
+        return { ok: true };
+      },
+    },
+  };
+  return { api, calls };
+}
+
+const DESCRIBED = {
+  params: [
+    { name: "blendMode", default: "normal" },
+    { name: "opacity", default: 0.75 },
+    { name: "angle", default: 120 },
+    { name: "distance", default: 5 },
+    { name: "spread", default: 0 },
+    { name: "size", default: 5 },
+    { name: "color", default: { space: "rgb", r: 0, g: 0, b: 0, a: 1 } },
+    { name: "noise", default: 0 },
+  ],
+};
+
+test("describeToMap reads array and object payloads", () => {
+  const fromArray = Shadow.describeToMap(DESCRIBED);
+  assert.equal(fromArray.size, 8);
+  assert.equal(fromArray.get("distance").name, "distance");
+  const fromObject = Shadow.describeToMap({ params: { angle: 30, size: 5 } });
+  assert.equal(fromObject.size, 2);
+  assert.equal(fromObject.get("size").value, 5);
+});
+
+test("effectParams maps onto the host's parameter names", () => {
+  const out = Shadow.effectParams(DESCRIBED, { distance: 42, blur: 12, opacity: 0.4, dx: 0, dy: 0 }, { angle: 90, colour: "#112233" });
+  assert.equal(out.angle, 90);
+  assert.equal(out.distance, 42);
+  assert.equal(out.size, 12);
+  assert.equal(out.opacity, 0.4);
+  assert.deepEqual(out.color, { space: "rgb", r: 0x11 / 255, g: 0x22 / 255, b: 0x33 / 255, a: 1 });
+});
+
+test("effectParams falls back to canonical names when describe is unavailable", () => {
+  const out = Shadow.effectParams(null, { distance: 10, blur: 3, opacity: 0.5 }, { angle: 45, colour: "#000000" });
+  assert.equal(out.angle, 45);
+  assert.equal(out.distance, 10);
+  assert.equal(out.size, 3);
+  assert.equal(out.opacity, 0.5);
+  assert.deepEqual(out.color, { space: "rgb", r: 0, g: 0, b: 0, a: 1 });
+});
+
+test("buildWithEffects appends one drop shadow per step on a single hidden-copy layer", async () => {
+  const { api, calls } = effectsApi(DESCRIBED);
+  const result = await Shadow.buildWithEffects(api, {
+    documentId: "doc-1",
+    sourceLayerId: "src",
+    params: { steps: 6, angle: 30, distance: 120, blur: 20, startOpacity: 100, endOpacity: 25 },
+  });
+
+  assert.equal(result.mode, "effects");
+  assert.equal(result.effects, 6);
+  assert.equal(calls.filter((c) => c.operation === "layer.duplicate").length, 1, "only one duplicated layer");
+  assert.equal(calls.filter((c) => c.operation === "layer.group").length, 0, "no group needed");
+
+  const update = calls.find((c) => c.operation === "layer.update");
+  assert.equal(update.params.properties.fillOpacity, 0, "the copy's own pixels are hidden");
+  assert.equal(update.params.properties.name, Shadow.GROUP_NAME);
+
+  const effects = calls.filter((c) => c.operation === "layer.effect.set");
+  assert.equal(effects.length, 6);
+  assert.deepEqual(effects.map((c) => c.params.index), [0, 1, 2, 3, 4, 5], "appended in order");
+  for (const call of effects) {
+    assert.equal(call.params.kind, "dropShadow");
+    assert.deepEqual(call.params.layerIds, ["fx1"]);
+    assert.ok(call.params.params.distance > 0);
+    assert.ok(call.params.params.size > 0);
+    assert.ok(call.params.params.opacity > 0 && call.params.params.opacity <= 1);
+  }
+  const distances = effects.map((c) => c.params.params.distance);
+  assert.ok(distances[0] > distances[distances.length - 1], "far shadow travels further");
+});
+
+test("buildWithEffects still works when describe fails", async () => {
+  const { api, calls } = effectsApi(undefined);
+  const result = await Shadow.buildWithEffects(api, {
+    documentId: "doc-1",
+    sourceLayerId: "src",
+    params: { steps: 3 },
+  });
+  assert.equal(result.effects, 3);
+  const effects = calls.filter((c) => c.operation === "layer.effect.set");
+  assert.equal(effects[0].params.params.angle, 30);
+  assert.ok("size" in effects[0].params.params);
+});
+
 (async () => {
   let failed = 0;
   for (const [name, fn] of tests) {

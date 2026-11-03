@@ -233,6 +233,143 @@
     }
   }
 
+
+  /* ------------------------------------------------------------------ layer styles */
+
+  /**
+   * Normalise effect.describe(kind:"dropShadow") into a { name -> default } map.
+   * The host may answer with an array of parameter descriptors or a plain defaults object.
+   */
+  function describeToMap(described) {
+    const map = new Map();
+    const payload = described && (described.params || described.parameters || described);
+    if (Array.isArray(payload)) {
+      for (const entry of payload) {
+        if (!entry) continue;
+        const name = entry.name || entry.key || entry.id;
+        if (!name) continue;
+        map.set(String(name).toLowerCase(), { name: String(name), value: entry.default });
+      }
+    } else if (payload && typeof payload === "object") {
+      for (const [name, value] of Object.entries(payload)) {
+        map.set(String(name).toLowerCase(), { name, value });
+      }
+    }
+    return map;
+  }
+
+  /** Pick the first available parameter whose name matches the pattern. */
+  function pickParam(map, pattern) {
+    for (const [key, entry] of map) {
+      if (pattern.test(key)) return entry.name;
+    }
+    return null;
+  }
+
+  /**
+   * Build one dropShadow effect payload from the host's parameter names.
+   * Taper is not representable with a layer style, so it is ignored in effects mode.
+   */
+  const CANONICAL_EFFECT_KEYS = {
+    angle: "angle",
+    distance: "distance",
+    size: "size",
+    opacity: "opacity",
+    colour: "color",
+  };
+
+  function effectParams(described, entry, params) {
+    const map = describeToMap(described);
+    const out = {};
+    if (map.size === 0) {
+      // describe() unavailable: fall back to Photon's documented effect parameter names
+      return {
+        angle: params.angle,
+        distance: Math.hypot(entry.dx || 0, entry.dy || 0) || entry.distance || 0,
+        size: Math.max(0.1, entry.blur),
+        opacity: Math.max(0.001, entry.opacity),
+        color: rgba(params.colour),
+      };
+    }
+    void CANONICAL_EFFECT_KEYS;
+    const set = (pattern, value) => {
+      const name = pickParam(map, pattern);
+      if (name) out[name] = value;
+    };
+    set(/^(angle|direction)$/, params.angle);
+    set(/distance|offset/, entry.distance !== undefined ? entry.distance : Math.hypot(entry.dx || 0, entry.dy || 0));
+    set(/^(size|blur|radius)/, Math.max(0.1, entry.blur));
+    set(/opacity/, Math.max(0.001, entry.opacity));
+    set(/colou?r/, rgba(params.colour));
+    set(/blend/, "normal");
+    set(/spread/, 0);
+    set(/noise/, 0);
+    set(/anti/, true);
+    set(/knock/, false);
+    set(/use.*global/, false);
+    return out;
+  }
+
+  /**
+   * Effects mode: one duplicate layer whose interior is hidden (fillOpacity 0) carrying N
+   * dropShadow layer styles. Photon lets `layer.effect.set` append by passing index === count,
+   * so several shadows of the same kind can coexist and stay editable in the Layer Style panel.
+   */
+  async function buildWithEffects(api, options) {
+    const documentId = options.documentId;
+    const sourceLayerId = options.sourceLayerId;
+    const plan = planLayers(options.params);
+    const onStep = options.onStep || (() => {});
+    const doc = await api.documents.active();
+
+    let described = null;
+    try {
+      described = await execute(api, documentId, "effect.describe", { kind: "dropShadow" });
+    } catch {
+      described = null; // fall back to the documented Photoshop-style names
+    }
+
+    const duplicated = await execute(api, documentId, "layer.duplicate", { layerIds: [sourceLayerId] });
+    const layerId = firstId(duplicated);
+    if (!layerId) throw new Error("Photon did not return the duplicated layer id.");
+
+    // Hide the copy's own pixels: only its effects should be visible.
+    await execute(api, documentId, "layer.update", {
+      layerId,
+      properties: { name: GROUP_NAME, fillOpacity: 0 },
+    });
+
+    let index = 0;
+    for (const entry of plan.layers) {
+      const effect = {
+        distance: Math.hypot(entry.dx, entry.dy),
+        blur: entry.blur,
+        opacity: entry.opacity,
+      };
+      await execute(api, documentId, "layer.effect.set", {
+        layerIds: [layerId],
+        kind: "dropShadow",
+        index,
+        params: effectParams(described, effect, plan.params),
+      });
+      index += 1;
+      onStep(index, plan.layers.length);
+    }
+
+    const after = await api.documents.active();
+    const sourceIndex = (after.layers || []).findIndex((item) => item.id === sourceLayerId);
+    const copyIndex = (after.layers || []).findIndex((item) => item.id === layerId);
+    const topFirst = copyIndex < sourceIndex;
+    return {
+      layerIds: [layerId],
+      groupId: layerId,
+      mode: "effects",
+      effects: index,
+      topFirst,
+      plan,
+    };
+  }
+
   return {
     DEFAULTS,
     GROUP_NAME,
@@ -243,6 +380,9 @@
     rgba,
     firstId,
     buildShadow,
+    buildWithEffects,
     removeShadow,
+    describeToMap,
+    effectParams,
   };
 });
