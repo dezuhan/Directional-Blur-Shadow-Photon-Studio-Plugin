@@ -118,6 +118,17 @@ from that. The shadow therefore lands directly behind the subject in either conv
 
 ## Changelog
 
+### 0.5.0
+
+- Fixed the created drop shadows keeping their defaults (Opacity 75 / Angle 120 / Distance 5 /
+  Size 5): the effect payload now starts from the host's own typed defaults returned by
+  `effect.describe` and overrides the mapped keys, so the payload is always complete.
+- After appending the N shadows the plugin **patches every index again** with the same values —
+  some hosts create the style with defaults on append and only apply `params` on a patch.
+- **Diagnostics → Inspect effect parameters** now also dumps the selected layer's effects, so the
+  real parameter names and resulting values can be compared in one place.
+- Tests: 20, now asserting the append+patch pairs and that typed defaults stay in the payload.
+
 ### 0.4.0
 
 - Defaults now match Beautiful Shadows: **5 layers**, distance 150 px, softness 26 px,

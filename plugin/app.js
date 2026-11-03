@@ -329,8 +329,13 @@ async function inspectEffects() {
     if (!doc) throw new Error("No active document.");
     const described = await api.documents.execute("effect.describe", { kind: "dropShadow" }, doc.id);
     const names = [...Shadow.describeToMap(described).keys()];
+    const layer = (doc.layers || []).find((item) => item.id === (doc.selectedLayerIds || []).slice(-1)[0]);
+    const effects =
+      layer && (layer.effects || layer.layerEffects || layer.styles || null);
     el.debugLog.textContent =
-      "dropShadow parameters: " + names.join(", ") + "\n\n" + JSON.stringify(described, null, 1);
+      "dropShadow parameters (" + names.length + "): " + names.join(", ") +
+      "\n\n" + JSON.stringify(described, null, 1) +
+      "\n\nlayer effects:\n" + JSON.stringify(effects, null, 1);
     el.badge.textContent = "Ready";
     el.badge.className = "badge ok";
     setStatus("inspected " + names.length + " parameter(s)");

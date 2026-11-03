@@ -314,44 +314,59 @@
    * Build one dropShadow effect payload from the host's parameter names.
    * Taper is not representable with a layer style, so it is ignored in effects mode.
    */
-  const CANONICAL_EFFECT_KEYS = {
-    angle: "angle",
-    distance: "distance",
-    size: "size",
-    opacity: "opacity",
-    colour: "color",
-  };
-
-  function effectParams(described, entry, params) {
+  function effectDefaults(described) {
     const map = describeToMap(described);
-    const out = {};
+    const defaults = {};
+    for (const meta of map.values()) defaults[meta.name] = meta.value;
+    return { map, defaults };
+  }
+
+  /**
+   * Build one dropShadow params object.
+   *
+   * Two problems this solves:
+   *  1. `layer.effect.set` validates a typed payload, so a partial object falls back to the
+   *     effect's defaults (that is why every created shadow showed Opacity 75 / Angle 120 /
+   *     Distance 5). Starting from the host's own defaults and overriding the keys we recognise
+   *     keeps the payload complete.
+   *  2. The host's parameter names are discovered with `effect.describe`; blur is sent through
+   *     the "size" parameter (Photoshop's drop-shadow blur), never through "spread".
+   */
+  function effectParams(described, entry, params) {
+    const { map, defaults } = effectDefaults(described);
+    const distance = entry.distance !== undefined ? entry.distance : Math.hypot(entry.dx || 0, entry.dy || 0);
+    const blur = Math.max(0.1, entry.blur);
+    const opacity = Math.max(0.001, entry.opacity);
+
     if (map.size === 0) {
-      // describe() unavailable: fall back to Photon's documented effect parameter names
       return {
         angle: params.angle,
-        distance: Math.hypot(entry.dx || 0, entry.dy || 0) || entry.distance || 0,
-        size: Math.max(0.1, entry.blur),
-        opacity: Math.max(0.001, entry.opacity),
+        distance,
+        size: blur,
+        spread: 0,
+        opacity,
         color: rgba(params.colour),
+        blendMode: "normal",
       };
     }
-    void CANONICAL_EFFECT_KEYS;
-    const set = (pattern, value) => {
-      const name = pickParam(map, pattern);
+
+    // keep every typed default, then override the ones we can map
+    const out = { ...defaults };
+    const set = (patterns, value) => {
+      const name = pickParam(map, patterns);
       if (name) out[name] = value;
     };
-    set(/^(angle|direction)$/, params.angle);
-    set(/distance|offset/, entry.distance !== undefined ? entry.distance : Math.hypot(entry.dx || 0, entry.dy || 0));
-    // A soft shadow needs the blur radius: try the explicit blur names first, "size" last.
-    set([/blur/, /radius/, /softness/, /^size$/], Math.max(0.1, entry.blur));
-    set(/opacity/, Math.max(0.001, entry.opacity));
-    set(/colou?r/, rgba(params.colour));
-    set(/blend/, "normal");
-    set(/spread/, 0);
-    set(/noise/, 0);
-    set(/anti/, true);
-    set(/knock/, false);
-    set(/use.*global/, false);
+    set([/^(angle|direction)$/], params.angle);
+    set([/distance|offset/], distance);
+    set([/blur/, /radius/, /softness/, /^size$/], blur);
+    set([/opacity/], opacity);
+    set([/colou?r/], rgba(params.colour));
+    set([/blend/], "normal");
+    set([/spread/], 0);
+    set([/noise/], 0);
+    set([/anti/], true);
+    set([/knock/], false);
+    set([/use.*global/], false);
     return out;
   }
 
@@ -384,21 +399,30 @@
       properties: { name: GROUP_NAME, fillOpacity: 0 },
     });
 
-    let index = 0;
-    for (const entry of plan.layers) {
-      const effect = {
-        distance: Math.hypot(entry.dx, entry.dy),
-        blur: entry.blur,
-        opacity: entry.opacity,
-      };
+    const payloads = plan.layers.map((entry) =>
+      effectParams(described, { distance: Math.hypot(entry.dx, entry.dy), blur: entry.blur, opacity: entry.opacity }, plan.params),
+    );
+
+    // Pass 1 — append one drop shadow per step.
+    for (let index = 0; index < payloads.length; index += 1) {
       await execute(api, documentId, "layer.effect.set", {
         layerIds: [layerId],
         kind: "dropShadow",
         index,
-        params: effectParams(described, effect, plan.params),
+        params: payloads[index],
       });
-      index += 1;
-      onStep(index, plan.layers.length);
+      onStep(index + 1, payloads.length);
+    }
+
+    // Pass 2 — set the values again by index. Some hosts create the style with its defaults on
+    // append and only apply params on a patch; this costs little and fixes that case.
+    for (let index = 0; index < payloads.length; index += 1) {
+      await execute(api, documentId, "layer.effect.set", {
+        layerIds: [layerId],
+        kind: "dropShadow",
+        index,
+        params: payloads[index],
+      });
     }
 
     const after = await api.documents.active();
@@ -409,7 +433,7 @@
       layerIds: [layerId],
       groupId: layerId,
       mode: "effects",
-      effects: index,
+      effects: payloads.length,
       topFirst,
       plan,
     };

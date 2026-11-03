@@ -309,17 +309,24 @@ test("buildWithEffects appends one drop shadow per step on a single hidden-copy 
   assert.equal(update.params.properties.name, Shadow.GROUP_NAME);
 
   const effects = calls.filter((c) => c.operation === "layer.effect.set");
-  assert.equal(effects.length, 6);
-  assert.deepEqual(effects.map((c) => c.params.index), [0, 1, 2, 3, 4, 5], "appended in order");
-  for (const call of effects) {
-    assert.equal(call.params.kind, "dropShadow");
-    assert.deepEqual(call.params.layerIds, ["fx1"]);
-    assert.ok(call.params.params.distance > 0);
-    assert.ok(call.params.params.size > 0);
-    assert.ok(call.params.params.opacity > 0 && call.params.params.opacity <= 1);
+  // pass 1 appends, pass 2 patches the same indices with the same values
+  assert.equal(effects.length, 12, "one append and one patch per step");
+  assert.deepEqual(effects.map((c) => c.params.index), [0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5]);
+  for (let index = 0; index < 6; index += 1) {
+    const append = effects[index];
+    const patch = effects[index + 6];
+    assert.equal(append.params.kind, "dropShadow");
+    assert.deepEqual(append.params.layerIds, ["fx1"]);
+    assert.deepEqual(append.params.params, patch.params.params, "the patch repeats the same values");
+    assert.ok(append.params.params.distance > 0);
+    assert.ok(append.params.params.size > 0);
+    assert.ok(append.params.params.opacity > 0 && append.params.params.opacity <= 1);
   }
-  const distances = effects.map((c) => c.params.params.distance);
+  const distances = effects.slice(0, 6).map((c) => c.params.params.distance);
   assert.ok(distances[0] > distances[distances.length - 1], "far shadow travels further");
+  // every typed default from effect.describe is still present, so the payload stays complete
+  assert.equal(effects[0].params.params.spread, 0);
+  assert.equal(effects[0].params.params.noise, 0);
 });
 
 test("buildWithEffects still works when describe fails", async () => {
@@ -363,7 +370,9 @@ test("effectParams prefers an explicit blur parameter over size", () => {
   };
   const out = Shadow.effectParams(described, { distance: 30, blur: 17, opacity: 0.5 }, { angle: 45, colour: "#000000" });
   assert.equal(out.blur, 17, "blur is used for softness");
-  assert.equal(out.size, undefined, "size is not touched when blur exists");
+  assert.equal(out.size, 4, "size keeps its typed default when an explicit blur exists");
+  assert.equal(out.angle, 45);
+  assert.equal(out.opacity, 0.5);
 });
 
 (async () => {
