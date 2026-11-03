@@ -250,40 +250,72 @@
 
   /* ------------------------------------------------------------------ layer styles */
 
+  const WRAPPER_KEYS = new Set([
+    "params", "parameters", "properties", "values", "defaults", "descriptor", "descriptors",
+    "kind", "kinds", "effect", "effects", "meta", "version", "schema", "inputSchema",
+  ]);
+
+  function looksLikeDescriptor(node) {
+    if (!node || typeof node !== "object" || Array.isArray(node)) return false;
+    const keys = Object.keys(node);
+    const hasName = keys.some((key) => key === "name" || key === "key" || key === "id" || key === "param");
+    const hasValue = keys.some((key) => key === "default" || key === "value" || key === "type");
+    return hasName && hasValue;
+  }
+
   /**
-   * Normalise effect.describe(kind:"dropShadow") into a { name -> default } map.
-   * The host may answer with an array of parameter descriptors or a plain defaults object.
+   * Normalise effect.describe(kind:"dropShadow") into a map of parameter name -> metadata.
+   *
+   * The exact wrapper is not part of the public contract, so this walks the whole payload:
+   * it accepts descriptor arrays ([{name, default, type}]), nested objects ({params: {...}}),
+   * and flat name -> value maps. Anything it cannot classify is ignored.
    */
   function describeToMap(described) {
     const map = new Map();
-    const payload = described && (described.params || described.parameters || described);
-    if (Array.isArray(payload)) {
-      for (const entry of payload) {
-        if (!entry) continue;
-        const name = entry.name || entry.key || entry.id;
-        if (!name) continue;
-        map.set(String(name).toLowerCase(), {
-          name: String(name),
-          value: entry.default,
-          type: entry.type,
-          unit: entry.unit,
-          min: entry.min,
-          max: entry.max,
-        });
+
+    const addDescriptor = (entry) => {
+      const name = entry.name || entry.key || entry.id || entry.param;
+      if (!name) return;
+      map.set(String(name).toLowerCase(), {
+        name: String(name),
+        value: "default" in entry ? entry.default : entry.value,
+        type: entry.type,
+        unit: entry.unit,
+        min: entry.min,
+        max: entry.max,
+      });
+    };
+
+    const addPair = (name, value) => {
+      if (WRAPPER_KEYS.has(String(name).toLowerCase())) return;
+      if (value && typeof value === "object" && !Array.isArray(value) && "default" in value) {
+        addDescriptor({ name, ...value });
+        return;
       }
-    } else if (payload && typeof payload === "object") {
-      for (const [name, value] of Object.entries(payload)) {
-        const meta = value && typeof value === "object" && "default" in value ? value : { default: value };
-        map.set(String(name).toLowerCase(), {
-          name,
-          value: meta.default,
-          type: meta.type,
-          unit: meta.unit,
-          min: meta.min,
-          max: meta.max,
-        });
+      map.set(String(name).toLowerCase(), { name: String(name), value });
+    };
+
+    const walk = (node, depth) => {
+      if (node == null || depth > 6) return;
+      if (Array.isArray(node)) {
+        for (const entry of node) {
+          if (looksLikeDescriptor(entry)) addDescriptor(entry);
+          else walk(entry, depth + 1);
+        }
+        return;
       }
-    }
+      if (typeof node !== "object") return;
+      if (looksLikeDescriptor(node)) {
+        addDescriptor(node);
+        return;
+      }
+      for (const [key, value] of Object.entries(node)) {
+        if (value && typeof value === "object") walk(value, depth + 1);
+        else addPair(key, value);
+      }
+    };
+
+    walk(described, 0);
     return map;
   }
 
@@ -310,10 +342,6 @@
     };
   }
 
-  /**
-   * Build one dropShadow effect payload from the host's parameter names.
-   * Taper is not representable with a layer style, so it is ignored in effects mode.
-   */
   function effectDefaults(described) {
     const map = describeToMap(described);
     const defaults = {};
@@ -346,70 +374,56 @@
     }
 
     const out = {};
-    const assigned = new Set();
     const find = (patterns) => pickParam(map, patterns);
+    const setNumber = (name, value) => {
+      if (name) out[name] = value;
+    };
 
-    const angleName = find([/^(angle|direction)$/]);
-    if (angleName) {
-      out[angleName] = params.angle;
-      assigned.add(angleName);
-    }
-
-    const distanceName = find([/distance|offset/]);
-    if (distanceName) {
-      out[distanceName] = distance;
-      assigned.add(distanceName);
-    }
-
+    const angleRad = (params.angle * Math.PI) / 180;
+    const angleName = find([/angle/, /direction/, /rotation/]);
+    const distanceName = find([/distance/, /offset(?!x|y)/, /radius$/]);
+    const xName = find([/^(x|posx|positionx|offsetx)$/]);
+    const yName = find([/^(y|posy|positiony|offsety)$/]);
     const sizeName = find([/blur/, /radius/, /softness/, /^size$/]);
-    if (sizeName) {
-      out[sizeName] = blur;
-      assigned.add(sizeName);
-    }
+    const opacityName = find([/opacity/, /alpha/, /transparency/]);
+    const colourName = find([/colou?r/, /tint/]);
+    const blendName = find([/blend/, /^mode$/]);
+    const spreadName = find([/spread/]);
+    const globalName = find([/use.*global/]);
 
-    const opacityName = find([/opacity/]);
+    // Positional hosts (x / y like the Figma plugin) get the Cartesian projection directly.
+    if (xName || yName) {
+      setNumber(xName, Math.cos(angleRad) * distance);
+      setNumber(yName, Math.sin(angleRad) * distance);
+    }
+    setNumber(distanceName, distance);
+    setNumber(angleName, params.angle);
+    setNumber(sizeName, blur);
+    if (spreadName) out[spreadName] = 0;
+    if (globalName) out[globalName] = false;
+
     if (opacityName) {
       const meta = map.get(opacityName.toLowerCase());
       const defaultValue = meta && typeof meta.value === "number" ? meta.value : 1;
       out[opacityName] = defaultValue > 1 ? wantOpacity * 100 : wantOpacity;
-      assigned.add(opacityName);
     }
-
-    const colourName = find([/colou?r/]);
     if (colourName) {
       const meta = map.get(colourName.toLowerCase());
       const defaultValue = meta && meta.value;
-      out[colourName] =
-        typeof defaultValue === "string"
-          ? String(params.colour).toUpperCase()
-          : rgba(params.colour);
-      assigned.add(colourName);
+      out[colourName] = typeof defaultValue === "string" ? String(params.colour).toUpperCase() : rgba(params.colour);
     }
-
-    const blendName = find([/blend/]);
     if (blendName) {
       const meta = map.get(blendName.toLowerCase());
       out[blendName] = typeof meta.value === "string" ? meta.value : "normal";
-      assigned.add(blendName);
     }
 
-    const spreadName = find([/spread/]);
-    if (spreadName) {
-      out[spreadName] = 0;
-      assigned.add(spreadName);
-    }
-
-    const globalName = find([/use.*global/]);
-    if (globalName) {
-      out[globalName] = false;
-      assigned.add(globalName);
-    }
-
-    if (!assigned.size) {
+    if (!Object.keys(out).length) {
       const error = new Error(
-        "None of the dropShadow parameters could be mapped. Diagnostics → Inspect effect parameters lists the real names.",
+        "None of the dropShadow parameters could be mapped. Discovered parameters: " +
+          [...map.keys()].join(", "),
       );
       error.code = "EFFECT_MAPPING_EMPTY";
+      error.discovered = [...map.keys()];
       throw error;
     }
     return out;

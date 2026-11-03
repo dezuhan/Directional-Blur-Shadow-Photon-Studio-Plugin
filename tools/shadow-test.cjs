@@ -389,6 +389,53 @@ test("effectParams infers units from the host defaults", () => {
   assert.deepEqual(fraction.color, { space: "rgb", r: 0x11 / 255, g: 0x22 / 255, b: 0x33 / 255, a: 1 });
 });
 
+
+test("describeToMap walks nested wrappers and flat maps", () => {
+  const nested = Shadow.describeToMap({ descriptor: { parameters: [{ name: "opacity", default: 0.5 }] } });
+  assert.equal(nested.size, 1);
+  assert.equal(nested.get("opacity").value, 0.5);
+
+  const flat = Shadow.describeToMap({ params: { angle: 30, size: 5, color: "000000" } });
+  assert.equal(flat.size, 3);
+  assert.equal(flat.get("size").value, 5);
+
+  const deep = Shadow.describeToMap({ kind: "dropShadow", meta: { version: 1, params: [{ key: "blur", default: 14 }] } });
+  assert.equal(deep.size, 1);
+  assert.equal(deep.get("blur").name, "blur");
+});
+
+test("effectParams supports positional X/Y hosts (Beautiful Shadows style)", () => {
+  const host = {
+    params: [
+      { name: "x", default: 2 },
+      { name: "y", default: 6 },
+      { name: "blur", default: 14 },
+      { name: "spread", default: 0 },
+      { name: "color", default: "000000" },
+      { name: "opacity", default: 44 },
+    ],
+  };
+  const out = Shadow.effectParams(host, { distance: 150, blur: 26, opacity: 0.38 }, { angle: 0, colour: "#000000" });
+  assert.ok(Math.abs(out.x - 150) < 1e-9, "angle 0 puts the shadow to the right");
+  assert.ok(Math.abs(out.y) < 1e-9);
+  assert.equal(out.blur, 26);
+  assert.equal(out.spread, 0);
+  assert.equal(out.color, "#000000");
+  assert.equal(out.opacity, 38, "percent host");
+  assert.equal(out.angle, undefined, "no angle parameter in this host");
+});
+
+test("unmappable parameters report the discovered keys", () => {
+  const host = { params: [{ name: "zap", default: 1 }, { name: "zop", default: 2 }] };
+  try {
+    Shadow.effectParams(host, { distance: 10, blur: 3, opacity: 0.5 }, { angle: 0, colour: "#000000" });
+    assert.fail("should have thrown");
+  } catch (error) {
+    assert.match(error.message, /zap, zop/);
+    assert.equal(error.code, "EFFECT_MAPPING_EMPTY");
+  }
+});
+
 (async () => {
   let failed = 0;
   for (const [name, fn] of tests) {

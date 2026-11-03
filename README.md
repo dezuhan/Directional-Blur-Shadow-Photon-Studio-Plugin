@@ -118,6 +118,20 @@ from that. The shadow therefore lands directly behind the subject in either conv
 
 ## Changelog
 
+### 0.7.0
+
+- `effect.describe` is now read **recursively**: descriptor arrays, nested wrappers
+  (`{descriptor: {parameters: [...]}}`, `{params: {...}}`) and flat name → value maps all work, so
+  the real parameter names are found regardless of the payload shape.
+- **Positional hosts** are supported: if the effect exposes `x`/`y` (like the Figma plugin's
+  Position fields) instead of `distance`+`angle`, the plugin projects the direction into those two
+  values directly.
+- Parameter matching is broader: `angle|direction|rotation`, `distance|offset`, `blur|radius|
+  softness|size`, `opacity|alpha|transparency`, `color|tint`, `blend|mode`.
+- When mapping still finds nothing, the error now lists the discovered parameter names, so a single
+  screenshot of the message is enough to fix the mapping.
+- Tests: 24.
+
 ### 0.6.0
 
 - Drop-shadow payloads are now built **strictly from `effect.describe`**: only parameter names the
