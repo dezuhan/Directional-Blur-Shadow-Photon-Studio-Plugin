@@ -322,51 +322,96 @@
   }
 
   /**
-   * Build one dropShadow params object.
+   * Build a dropShadow payload that the host will accept.
    *
-   * Two problems this solves:
-   *  1. `layer.effect.set` validates a typed payload, so a partial object falls back to the
-   *     effect's defaults (that is why every created shadow showed Opacity 75 / Angle 120 /
-   *     Distance 5). Starting from the host's own defaults and overriding the keys we recognise
-   *     keeps the payload complete.
-   *  2. The host's parameter names are discovered with `effect.describe`; blur is sent through
-   *     the "size" parameter (Photoshop's drop-shadow blur), never through "spread".
+   * The registry validates this payload strictly ("Invalid dropShadow parameters; inspect
+   * effect.describe"), so this function:
+   *   - only sends keys that `effect.describe` actually lists;
+   *   - infers units from the host's own defaults: an opacity default of 75 means percent,
+   *     0.75 means a fraction; a string colour default means hex, an object means rgb;
+   *   - refuses to guess when the description is missing, instead of sending invalid params.
    */
   function effectParams(described, entry, params) {
-    const { map, defaults } = effectDefaults(described);
+    const { map } = effectDefaults(described);
     const distance = entry.distance !== undefined ? entry.distance : Math.hypot(entry.dx || 0, entry.dy || 0);
     const blur = Math.max(0.1, entry.blur);
-    const opacity = Math.max(0.001, entry.opacity);
+    const wantOpacity = Math.max(0, Math.min(1, entry.opacity));
 
     if (map.size === 0) {
-      return {
-        angle: params.angle,
-        distance,
-        size: blur,
-        spread: 0,
-        opacity,
-        color: rgba(params.colour),
-        blendMode: "normal",
-      };
+      const error = new Error(
+        "dropShadow parameters are unknown: effect.describe returned nothing. Open Diagnostics → Inspect effect parameters and check the log.",
+      );
+      error.code = "EFFECT_DESCRIBE_MISSING";
+      throw error;
     }
 
-    // keep every typed default, then override the ones we can map
-    const out = { ...defaults };
-    const set = (patterns, value) => {
-      const name = pickParam(map, patterns);
-      if (name) out[name] = value;
-    };
-    set([/^(angle|direction)$/], params.angle);
-    set([/distance|offset/], distance);
-    set([/blur/, /radius/, /softness/, /^size$/], blur);
-    set([/opacity/], opacity);
-    set([/colou?r/], rgba(params.colour));
-    set([/blend/], "normal");
-    set([/spread/], 0);
-    set([/noise/], 0);
-    set([/anti/], true);
-    set([/knock/], false);
-    set([/use.*global/], false);
+    const out = {};
+    const assigned = new Set();
+    const find = (patterns) => pickParam(map, patterns);
+
+    const angleName = find([/^(angle|direction)$/]);
+    if (angleName) {
+      out[angleName] = params.angle;
+      assigned.add(angleName);
+    }
+
+    const distanceName = find([/distance|offset/]);
+    if (distanceName) {
+      out[distanceName] = distance;
+      assigned.add(distanceName);
+    }
+
+    const sizeName = find([/blur/, /radius/, /softness/, /^size$/]);
+    if (sizeName) {
+      out[sizeName] = blur;
+      assigned.add(sizeName);
+    }
+
+    const opacityName = find([/opacity/]);
+    if (opacityName) {
+      const meta = map.get(opacityName.toLowerCase());
+      const defaultValue = meta && typeof meta.value === "number" ? meta.value : 1;
+      out[opacityName] = defaultValue > 1 ? wantOpacity * 100 : wantOpacity;
+      assigned.add(opacityName);
+    }
+
+    const colourName = find([/colou?r/]);
+    if (colourName) {
+      const meta = map.get(colourName.toLowerCase());
+      const defaultValue = meta && meta.value;
+      out[colourName] =
+        typeof defaultValue === "string"
+          ? String(params.colour).toUpperCase()
+          : rgba(params.colour);
+      assigned.add(colourName);
+    }
+
+    const blendName = find([/blend/]);
+    if (blendName) {
+      const meta = map.get(blendName.toLowerCase());
+      out[blendName] = typeof meta.value === "string" ? meta.value : "normal";
+      assigned.add(blendName);
+    }
+
+    const spreadName = find([/spread/]);
+    if (spreadName) {
+      out[spreadName] = 0;
+      assigned.add(spreadName);
+    }
+
+    const globalName = find([/use.*global/]);
+    if (globalName) {
+      out[globalName] = false;
+      assigned.add(globalName);
+    }
+
+    if (!assigned.size) {
+      const error = new Error(
+        "None of the dropShadow parameters could be mapped. Diagnostics → Inspect effect parameters lists the real names.",
+      );
+      error.code = "EFFECT_MAPPING_EMPTY";
+      throw error;
+    }
     return out;
   }
 
@@ -403,26 +448,23 @@
       effectParams(described, { distance: Math.hypot(entry.dx, entry.dy), blur: entry.blur, opacity: entry.opacity }, plan.params),
     );
 
-    // Pass 1 — append one drop shadow per step.
+    // Append one drop shadow per step. If the host rejects a payload, surface the exact payload so
+    // Diagnostics can show what it did not like instead of repeating the error N times.
     for (let index = 0; index < payloads.length; index += 1) {
-      await execute(api, documentId, "layer.effect.set", {
-        layerIds: [layerId],
-        kind: "dropShadow",
-        index,
-        params: payloads[index],
-      });
+      try {
+        await execute(api, documentId, "layer.effect.set", {
+          layerIds: [layerId],
+          kind: "dropShadow",
+          index,
+          params: payloads[index],
+        });
+      } catch (error) {
+        const wrapped = new Error(String((error && error.message) || error));
+        wrapped.code = "EFFECT_REJECTED";
+        wrapped.payload = { index, params: payloads[index] };
+        throw wrapped;
+      }
       onStep(index + 1, payloads.length);
-    }
-
-    // Pass 2 — set the values again by index. Some hosts create the style with its defaults on
-    // append and only apply params on a patch; this costs little and fixes that case.
-    for (let index = 0; index < payloads.length; index += 1) {
-      await execute(api, documentId, "layer.effect.set", {
-        layerIds: [layerId],
-        kind: "dropShadow",
-        index,
-        params: payloads[index],
-      });
     }
 
     const after = await api.documents.active();

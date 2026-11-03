@@ -118,6 +118,19 @@ from that. The shadow therefore lands directly behind the subject in either conv
 
 ## Changelog
 
+### 0.6.0
+
+- Drop-shadow payloads are now built **strictly from `effect.describe`**: only parameter names the
+  host lists are sent, units are inferred from the host's own defaults (opacity default 75 means
+  percent, 0.75 means a fraction; a string colour default means hex, an object means rgb), and
+  `spread` / `useGlobalLight` are only included when they exist.
+- When `effect.describe` returns nothing the plugin **refuses to guess**: it stops with a clear
+  message instead of sending an invalid payload (which is what produced "Invalid dropShadow
+  parameters").
+- A rejected payload is shown in Diagnostics together with the exact object Photon refused, so the
+  mapping can be corrected from evidence.
+- Tests: 21.
+
 ### 0.5.0
 
 - Fixed the created drop shadows keeping their defaults (Opacity 75 / Angle 120 / Distance 5 /

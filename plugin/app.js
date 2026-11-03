@@ -163,6 +163,11 @@ async function runPreview() {
   } catch (error) {
     badge("Failed", "danger");
     setStatus(errText(error));
+    if (error && (error.code === "EFFECT_REJECTED" || error.code === "EFFECT_DESCRIBE_MISSING")) {
+      el.debugLog.textContent =
+        errText(error) + "\n\npayload rejected by Photon:\n" + JSON.stringify(error.payload || null, null, 1);
+      el.hint.textContent = "Photon rejected the dropShadow payload — open Diagnostics and send the log.";
+    }
   } finally {
     setBusy(false);
   }

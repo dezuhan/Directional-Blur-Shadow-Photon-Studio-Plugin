@@ -282,13 +282,11 @@ test("effectParams maps onto the host's parameter names", () => {
   assert.deepEqual(out.color, { space: "rgb", r: 0x11 / 255, g: 0x22 / 255, b: 0x33 / 255, a: 1 });
 });
 
-test("effectParams falls back to canonical names when describe is unavailable", () => {
-  const out = Shadow.effectParams(null, { distance: 10, blur: 3, opacity: 0.5 }, { angle: 45, colour: "#000000" });
-  assert.equal(out.angle, 45);
-  assert.equal(out.distance, 10);
-  assert.equal(out.size, 3);
-  assert.equal(out.opacity, 0.5);
-  assert.deepEqual(out.color, { space: "rgb", r: 0, g: 0, b: 0, a: 1 });
+test("effectParams throws when describe is unavailable", () => {
+  assert.throws(
+    () => Shadow.effectParams(null, { distance: 10, blur: 3, opacity: 0.5 }, { angle: 45, colour: "#000000" }),
+    /effect.describe returned nothing/,
+  );
 });
 
 test("buildWithEffects appends one drop shadow per step on a single hidden-copy layer", async () => {
@@ -309,37 +307,27 @@ test("buildWithEffects appends one drop shadow per step on a single hidden-copy 
   assert.equal(update.params.properties.name, Shadow.GROUP_NAME);
 
   const effects = calls.filter((c) => c.operation === "layer.effect.set");
-  // pass 1 appends, pass 2 patches the same indices with the same values
-  assert.equal(effects.length, 12, "one append and one patch per step");
-  assert.deepEqual(effects.map((c) => c.params.index), [0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5]);
-  for (let index = 0; index < 6; index += 1) {
-    const append = effects[index];
-    const patch = effects[index + 6];
-    assert.equal(append.params.kind, "dropShadow");
-    assert.deepEqual(append.params.layerIds, ["fx1"]);
-    assert.deepEqual(append.params.params, patch.params.params, "the patch repeats the same values");
-    assert.ok(append.params.params.distance > 0);
-    assert.ok(append.params.params.size > 0);
-    assert.ok(append.params.params.opacity > 0 && append.params.params.opacity <= 1);
+  assert.equal(effects.length, 6, "one append per step");
+  assert.deepEqual(effects.map((c) => c.params.index), [0, 1, 2, 3, 4, 5]);
+  for (const call of effects) {
+    assert.equal(call.params.kind, "dropShadow");
+    assert.deepEqual(call.params.layerIds, ["fx1"]);
+    assert.ok(call.params.params.distance > 0);
+    assert.ok(call.params.params.size > 0);
+    assert.ok(call.params.params.opacity > 0 && call.params.params.opacity <= 1);
+    assert.equal(call.params.params.spread, 0, "spread comes from the described names");
   }
-  const distances = effects.slice(0, 6).map((c) => c.params.params.distance);
+  const distances = effects.map((c) => c.params.params.distance);
   assert.ok(distances[0] > distances[distances.length - 1], "far shadow travels further");
-  // every typed default from effect.describe is still present, so the payload stays complete
-  assert.equal(effects[0].params.params.spread, 0);
-  assert.equal(effects[0].params.params.noise, 0);
 });
 
-test("buildWithEffects still works when describe fails", async () => {
+test("buildWithEffects refuses to guess when describe is unavailable", async () => {
   const { api, calls } = effectsApi(undefined);
-  const result = await Shadow.buildWithEffects(api, {
-    documentId: "doc-1",
-    sourceLayerId: "src",
-    params: { steps: 3 },
-  });
-  assert.equal(result.effects, 3);
-  const effects = calls.filter((c) => c.operation === "layer.effect.set");
-  assert.equal(effects[0].params.params.angle, 30);
-  assert.ok("size" in effects[0].params.params);
+  await assert.rejects(
+    Shadow.buildWithEffects(api, { documentId: "doc-1", sourceLayerId: "src", params: { steps: 3 } }),
+    /effect.describe returned nothing/,
+  );
+  assert.equal(calls.filter((c) => c.operation === "layer.effect.set").length, 0, "no invalid payload sent");
 });
 
 
@@ -370,9 +358,35 @@ test("effectParams prefers an explicit blur parameter over size", () => {
   };
   const out = Shadow.effectParams(described, { distance: 30, blur: 17, opacity: 0.5 }, { angle: 45, colour: "#000000" });
   assert.equal(out.blur, 17, "blur is used for softness");
-  assert.equal(out.size, 4, "size keeps its typed default when an explicit blur exists");
+  assert.equal(out.size, undefined, "size is not sent when an explicit blur exists");
   assert.equal(out.angle, 45);
   assert.equal(out.opacity, 0.5);
+});
+
+
+test("effectParams infers units from the host defaults", () => {
+  const percentHost = {
+    params: [
+      { name: "opacity", default: 75 },
+      { name: "angle", default: 120 },
+      { name: "distance", default: 5 },
+      { name: "size", default: 5 },
+      { name: "color", default: "000000" },
+    ],
+  };
+  const percent = Shadow.effectParams(percentHost, { distance: 150, blur: 26, opacity: 0.38 }, { angle: 30, colour: "#000000" });
+  assert.equal(percent.opacity, 38, "percent host gets 0-100");
+  assert.equal(percent.color, "#000000", "string colour default means hex");
+
+  const fractionHost = {
+    params: [
+      { name: "opacity", default: 0.75 },
+      { name: "color", default: { space: "rgb", r: 0, g: 0, b: 0, a: 1 } },
+    ],
+  };
+  const fraction = Shadow.effectParams(fractionHost, { distance: 150, blur: 26, opacity: 0.38 }, { angle: 30, colour: "#112233" });
+  assert.equal(fraction.opacity, 0.38, "fraction host keeps 0-1");
+  assert.deepEqual(fraction.color, { space: "rgb", r: 0x11 / 255, g: 0x22 / 255, b: 0x33 / 255, a: 1 });
 });
 
 (async () => {
