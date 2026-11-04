@@ -100,9 +100,11 @@ test("angle drives the offset vector", () => {
 
 test("normalise clamps ranges and rejects junk colour", () => {
   const params = Shadow.normalise({ angle: -10, distance: 99999, blur: 0, darkness: 900, colour: "red" });
+  assert.equal(Shadow.DEFAULTS.blur, 75);
+  assert.equal(Shadow.normalise({ blur: 999 }).blur, 75, "softness is capped at 75 px");
   assert.equal(params.angle, 0, "angles are clamped, not wrapped");
   assert.equal(params.distance, 300);
-  assert.equal(params.blur, 0.1);
+  assert.equal(params.blur, 1);
   assert.equal(params.darkness, 100);
   assert.equal(params.colour, "#000000");
 });

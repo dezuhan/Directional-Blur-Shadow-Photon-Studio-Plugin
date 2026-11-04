@@ -20,7 +20,7 @@ A paper stage with a draggable **light handle** (sun with rays) and a floating *
 | `A °` | 0–360 | 30 | Shadow direction: 0° right, 90° down |
 | `D px` | 1–300 | 150 | How far the shadow travels |
 | `Light %` | 1–100 | 100 | Scales every layer's opacity (Figma's Brightness) |
-| `Soft px` | 1–300 | 26 | Blur at the far end |
+| `Soft px` | 1–75 | 75 | Blur at the far end |
 
 Drag the sun to aim: the shadow falls on the **opposite** side, and an `angle° · distance px` chip
 follows the pointer. The bottom bar holds the colour swatch, **Preview** and **Apply**.
@@ -91,6 +91,10 @@ styles snapshot/restore, and the single-write pipeline. A Preview sends **4 oper
 (`documents.active` ×2, `effect.describe`, `layer.effects.set`).
 
 ## Changelog
+
+### 0.12.2
+
+- Softness is now **75 px** by default and capped at **75 px** (was 1–300).
 
 ### 0.12.1
 
