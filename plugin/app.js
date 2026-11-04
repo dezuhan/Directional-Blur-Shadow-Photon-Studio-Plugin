@@ -12,6 +12,7 @@ const Shadow = globalThis.PhotonShadow;
 const el = {
   badge: document.getElementById("badge"),
   mode: document.getElementById("mode"),
+  angleMode: document.getElementById("angleMode"),
   modeHint: document.getElementById("modeHint"),
   angle: document.getElementById("angle"),
   distance: document.getElementById("distance"),
@@ -102,6 +103,7 @@ async function buildFor(doc, layerId, params, mode) {
       documentId: doc.id,
       layerId,
       params,
+      angleMode: el.angleMode ? el.angleMode.value : "light-yup",
       onStep: (done, total) => setStatus("shadow " + done + " / " + total),
     });
   }

@@ -277,7 +277,7 @@ test("describeToMap walks nested wrappers and flat maps", () => {
 
 test("effectParams maps onto the host's parameter names", () => {
   const out = Shadow.effectParams(DESCRIBED, { distance: 42, blur: 12, opacity: 0.4, dx: 0, dy: 0 }, { angle: 90, colour: "#112233" });
-  assert.equal(out.angle, 270, "host angle is the light direction: shadow angle 90 becomes 270");
+  assert.equal(out.angle, 90, "light angle for a 90° (downward) shadow is 90° in Photon's y-up dial");
   assert.equal(out.distance, 42);
   assert.equal(out.size, 12);
   assert.equal(out.opacity, 40, "percent host");
@@ -386,6 +386,20 @@ test("restoreLayerStyles puts the snapshot back", async () => {
   const cleared = effectsApi();
   await Shadow.restoreLayerStyles(cleared, "doc-1", "src", null);
   assert.equal(cleared.calls.filter((c) => c.operation === "layer.effects.clear").length, 1, "clears when there was nothing to restore");
+});
+
+
+test("effectAngle maps screen angles onto Photon's Photoshop dial", () => {
+  // shadow to the right (0°) needs the light on the left → 180°
+  assert.equal(Shadow.effectAngle(0), 180);
+  // shadow down (90°) → light from above (90° in a y-up dial)
+  assert.equal(Shadow.effectAngle(90), 90);
+  assert.equal(Shadow.effectAngle(180), 0);
+  assert.equal(Shadow.effectAngle(270), 270);
+  assert.ok(Math.abs(Shadow.effectAngle(32.1) - 147.9) < 1e-9);
+  // escape hatch for hosts that read the angle as the shadow offset
+  assert.ok(Math.abs(Shadow.effectAngle(32.1, "shadow-ydown") - 32.1) < 1e-9);
+  assert.equal(Shadow.effectAngle(-90), 270);
 });
 
 (async () => {

@@ -131,6 +131,16 @@ from that. The shadow therefore lands directly behind the subject in either conv
 
 ## Changelog
 
+### 0.10.1
+
+- **Angle convention corrected.** Photon's dial is Photoshop's: the angle is the *light* direction,
+  counter-clockwise with 0° at the right and 90° pointing **up**. In screen coordinates a shadow
+  pointing at θ therefore needs `light = 180° − θ` (the previous `θ + 180` was a horizontal mirror,
+  which is why the shadow kept landing on the wrong side).
+- **Advanced → Angle convention** offers an escape hatch (`Shadow offset`, y-down) for hosts that
+  read the angle as the shadow direction itself.
+- Tests: 22.
+
 ### 0.10.0
 
 - **Effects now go on the selected layer — no duplicate.** The shadow is written with one

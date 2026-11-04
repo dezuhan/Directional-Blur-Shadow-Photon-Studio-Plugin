@@ -361,12 +361,30 @@
    * that `effect.describe` lists are sent, units are inferred from the host's own defaults, and
    * Photon's light-angle convention is applied (shadow angle + 180).
    */
-  function effectParams(described, entry, params) {
+  const ANGLE_MODES = ["light-yup", "shadow-ydown"];
+
+  /**
+   * Convert our screen-space shadow angle (0° = right, 90° = down) into the angle the host expects.
+   *
+   * Photon's dial follows Photoshop: the angle is the LIGHT direction, measured counter-clockwise
+   * with 0° at the right and 90° pointing up. In screen coordinates the shadow of light angle L
+   * falls at (-cos L, +sin L), so a desired shadow direction θ needs L = 180° − θ.
+   *
+   * "shadow-ydown" is the escape hatch: hosts that read the angle as the shadow offset itself get θ.
+   */
+  function effectAngle(shadowAngle, angleMode) {
+    const theta = ((Number(shadowAngle) % 360) + 360) % 360;
+    const mode = ANGLE_MODES.includes(angleMode) ? angleMode : ANGLE_MODES[0];
+    const value = mode === "shadow-ydown" ? theta : 180 - theta;
+    return ((value % 360) + 360) % 360;
+  }
+
+  function effectParams(described, entry, params, options) {
     const { map } = effectDefaults(described);
     const distance = entry.distance !== undefined ? entry.distance : Math.hypot(entry.dx || 0, entry.dy || 0);
     const blur = Math.max(0.1, entry.blur);
     const wantOpacity = Math.max(0, Math.min(1, entry.opacity));
-    const lightAngle = (params.angle + 180) % 360;
+    const lightAngle = effectAngle(params.angle, options && options.angleMode);
 
     if (map.size === 0) {
       const error = new Error(
@@ -486,6 +504,7 @@
         described,
         { distance: Math.hypot(entry.dx, entry.dy), blur: entry.blur, opacity: entry.opacity },
         plan.params,
+        { angleMode: options.angleMode },
       ),
     );
 
@@ -532,6 +551,8 @@
     removeShadow,
     describeToMap,
     effectParams,
+    effectAngle,
+    ANGLE_MODES,
     vectorToAngleDistance,
     emptyStyles,
     stylesFromLayer,
