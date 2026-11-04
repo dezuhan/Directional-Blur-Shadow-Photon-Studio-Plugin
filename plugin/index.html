@@ -12,109 +12,99 @@
         <span id="badge" class="badge ok">Ready</span>
       </header>
 
-      <div class="field">
-        <label class="label" for="mode">Mode</label>
-        <select id="mode" class="input">
-          <option value="effects" selected>Layer styles — 1 layer, N drop shadows</option>
-          <option value="copies">Layer copies — N layers, supports taper</option>
-        </select>
-        <p id="modeHint" class="hint">
-          Layer styles stay editable in Photon's Layer Style panel; copies allow taper.
-        </p>
+      <div class="stage">
+        <canvas id="previewCanvas" width="320" height="252" aria-label="Drag the light to aim the shadow"></canvas>
+
+        <details class="sheet" open>
+          <summary>
+            <span class="sheet-title">Drop Shadow</span>
+          </summary>
+          <div class="mini-row">
+            <label class="mini">
+              <span>A °</span>
+              <input id="angle" type="number" min="0" max="360" step="1" value="30" />
+            </label>
+            <label class="mini">
+              <span>D px</span>
+              <input id="distance" type="number" min="1" max="2000" step="1" value="150" />
+            </label>
+          </div>
+          <div class="mini-row">
+            <label class="mini">
+              <span>Light %</span>
+              <input id="darkness" type="number" min="10" max="300" step="5" value="100" />
+            </label>
+            <label class="mini">
+              <span>Soft px</span>
+              <input id="blur" type="number" min="1" max="300" step="1" value="26" />
+            </label>
+          </div>
+        </details>
       </div>
-
-      <div class="preview-box">
-        <canvas id="previewCanvas" width="320" height="180" aria-label="Shadow direction preview"></canvas>
-      </div>
-      <p class="hint">
-        Drag the handle to point the shadow. The preview redraws instantly; the document only
-        changes when you press Preview or Apply.
-      </p>
-
-      <div class="row">
-        <div class="field">
-          <label class="label" for="angle">Angle (°)</label>
-          <input id="angle" class="input" type="number" min="0" max="360" step="1" value="30" />
-        </div>
-        <div class="field">
-          <label class="label" for="distance">Distance (px)</label>
-          <input id="distance" class="input" type="number" min="1" max="2000" step="1" value="150" />
-        </div>
-      </div>
-
-      <div class="row">
-        <div class="field">
-          <label class="label" for="steps">Layers</label>
-          <input id="steps" class="input" type="number" min="3" max="30" step="1" value="5" />
-        </div>
-        <div class="field">
-          <label class="label" for="blur">Softness (px)</label>
-          <input id="blur" class="input" type="number" min="1" max="300" step="1" value="26" />
-        </div>
-      </div>
-
-      <div class="row">
-        <div class="field">
-          <label class="label" for="colour">Colour</label>
-          <input id="colour" class="input colour" type="color" value="#000000" />
-        </div>
-        <div class="field">
-          <label class="label" for="darkness">Lighting strength (%)</label>
-          <input id="darkness" class="input" type="number" min="10" max="300" step="5" value="100" />
-        </div>
-      </div>
-
-      <details class="advanced">
-        <summary>Advanced</summary>
-      <div class="row">
-        <div class="field">
-          <label class="label" for="startOpacity">Start opacity (%)</label>
-          <input id="startOpacity" class="input" type="number" min="1" max="100" step="1" value="44" />
-        </div>
-        <div class="field">
-          <label class="label" for="endOpacity">End opacity (%)</label>
-          <input id="endOpacity" class="input" type="number" min="0" max="100" step="1" value="1" />
-        </div>
-      </div>
-
-      <div class="section">
-        <label class="check">
-          <input type="checkbox" id="taper" />
-          <span>Taper (narrow / expand)</span>
-        </label>
-        <div class="field indent">
-          <label class="label" for="taperEnd">Size at tip (%)</label>
-          <input id="taperEnd" class="input" type="number" min="1" max="500" step="5" value="90" disabled />
-        </div>
-      </div>
-
-      <label class="check">
-        <input type="checkbox" id="rasterize" checked />
-        <span>Rasterize into one layer on Apply</span>
-      </label>
-      </details>
-
 
       <div class="actions">
+        <label class="swatch" title="Shadow colour">
+          <input id="colour" type="color" value="#000000" />
+        </label>
         <button id="preview" class="button" type="button">Preview</button>
-        <button id="apply" class="button cancel" type="button">Apply</button>
+        <button id="apply" class="button primary" type="button">Apply</button>
       </div>
       <div class="actions">
         <button id="removePreview" class="button quiet" type="button" hidden>Remove preview</button>
       </div>
 
-      <p id="hint" class="hint">
-        Select one layer, then Preview. Apply keeps the result behind the subject as a group named
-        “Directional Blur Shadow”.
-      </p>
+      <details class="advanced">
+        <summary>Advanced</summary>
 
-      <details class="debug">
-        <summary>Diagnostics</summary>
+        <div class="field">
+          <label class="label" for="mode">Mode</label>
+          <select id="mode" class="input">
+            <option value="effects" selected>Layer styles — 1 layer, N drop shadows</option>
+            <option value="copies">Layer copies — N layers, supports taper</option>
+          </select>
+          <p id="modeHint" class="hint">One layer with N drop shadows, editable in the Layer Style panel.</p>
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label class="label" for="steps">Layers</label>
+            <input id="steps" class="input" type="number" min="3" max="30" step="1" value="5" />
+          </div>
+          <div class="field">
+            <label class="label" for="startOpacity">Start opacity (%)</label>
+            <input id="startOpacity" class="input" type="number" min="1" max="100" step="1" value="44" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label class="label" for="endOpacity">End opacity (%)</label>
+            <input id="endOpacity" class="input" type="number" min="0" max="100" step="1" value="1" />
+          </div>
+          <div class="field">
+            <label class="label" for="taperEnd">Taper tip (%)</label>
+            <input id="taperEnd" class="input" type="number" min="1" max="500" step="5" value="90" disabled />
+          </div>
+        </div>
+
+        <label class="check">
+          <input type="checkbox" id="taper" />
+          <span>Enable taper (copies mode)</span>
+        </label>
+        <label class="check">
+          <input type="checkbox" id="rasterize" checked />
+          <span>Rasterize into one layer on Apply (copies mode)</span>
+        </label>
+
         <div class="actions">
           <button id="inspect" class="button quiet" type="button">Inspect effect parameters</button>
         </div>
         <pre id="debugLog" class="debug-log"></pre>
       </details>
+
+      <p id="hint" class="hint">
+        Drag the light to aim the shadow. Nothing is written to the document until Preview or Apply.
+      </p>
 
       <footer class="panel-footer">
         <span id="status">idle</span>

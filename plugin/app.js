@@ -234,7 +234,8 @@ const CARD = { width: 112, height: 82 };
 const SCALE = 0.42;
 
 function canvasCentre() {
-  return { x: el.previewCanvas.width / 2, y: el.previewCanvas.height / 2 };
+  // the card sits above the value sheet, which floats at the bottom of the stage
+  return { x: el.previewCanvas.width / 2, y: el.previewCanvas.height / 2 - 30 };
 }
 
 function roundRect(ctx, x, y, width, height, radius) {
@@ -310,26 +311,56 @@ function drawPreview() {
   ctx.stroke();
   ctx.restore();
 
-  // direction handle
-  const reach = Math.min(64, Math.max(12, params.distance * SCALE));
+  // light handle: a small sun whose rays point away from the card
+  const reach = Math.min(74, Math.max(26, params.distance * SCALE));
   const angleRad = (params.angle * Math.PI) / 180;
   const hx = centre.x + Math.cos(angleRad) * reach;
   const hy = centre.y + Math.sin(angleRad) * reach;
+
   ctx.save();
-  ctx.strokeStyle = "rgba(43,108,246,0.55)";
-  ctx.lineWidth = 1.4;
+  ctx.strokeStyle = "rgba(43,108,246,0.35)";
+  ctx.setLineDash([3, 3]);
+  ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(centre.x, centre.y);
   ctx.lineTo(hx, hy);
   ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(hx, hy, 6, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(43,108,246,0.18)";
-  ctx.fill();
+  ctx.setLineDash([]);
+
   ctx.strokeStyle = "#2b6cf6";
-  ctx.lineWidth = 1.8;
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.arc(hx, hy, 7, 0, Math.PI * 2);
+  ctx.fillStyle = "#ffffff";
+  ctx.fill();
   ctx.stroke();
+
+  ctx.lineWidth = 1.3;
+  for (let ray = 0; ray < 8; ray += 1) {
+    const rayAngle = angleRad + Math.PI / 2 + (ray * Math.PI) / 4;
+    const inner = 11;
+    const outer = 15;
+    ctx.beginPath();
+    ctx.moveTo(hx + Math.cos(rayAngle) * inner, hy + Math.sin(rayAngle) * inner);
+    ctx.lineTo(hx + Math.cos(rayAngle) * outer, hy + Math.sin(rayAngle) * outer);
+    ctx.stroke();
+  }
   ctx.restore();
+
+  // live readout while dragging, like the Figma plugin's brightness chip
+  if (dragging) {
+    const label = Math.round(params.angle) + "°  ·  " + Math.round(params.distance) + " px";
+    ctx.save();
+    ctx.font = "600 10px Inter, system-ui, sans-serif";
+    const width = ctx.measureText(label).width + 14;
+    ctx.fillStyle = "rgba(43,108,246,0.92)";
+    roundRect(ctx, 8, 8, width, 18, 5);
+    ctx.fill();
+    ctx.fillStyle = "#ffffff";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, 15, 18);
+    ctx.restore();
+  }
 }
 
 function handlePointer(event) {

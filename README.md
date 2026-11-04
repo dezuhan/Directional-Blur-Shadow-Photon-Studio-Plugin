@@ -8,6 +8,19 @@ selected layer in a chosen direction, blurring, fading and optionally tapering a
 - **Preview first**: build the whole shadow, look at it, discard it if you do not like it.
 - Everything runs through Photon's own operations — no service, no network, no extra binary.
 
+## Compact panel
+
+The panel mirrors the Beautiful Shadows layout with Tenzen-native tokens:
+
+- a tall paper stage where the subject sits high and the **light handle** (sun with rays) floats
+  around it — drag it to set angle and distance, with a live `angle° · distance px` readout;
+- a floating **Drop Shadow** sheet over the bottom of the stage with four inline fields:
+  `A °` (angle), `D px` (distance), `Light %` (darkness), `Soft px` (blur);
+- a bottom bar with the round colour swatch, **Preview** and **Apply**; everything else
+  (mode, layers, start/end opacity, taper, rasterize, diagnostics) lives under **Advanced**.
+
+Nothing is written to the document until Preview or Apply is pressed.
+
 ## Controls
 
 | Control | Range | Default | Meaning |
@@ -117,6 +130,15 @@ from that. The shadow therefore lands directly behind the subject in either conv
   preview on screen leaves it behind — press **Remove preview** first.
 
 ## Changelog
+
+### 0.9.0
+
+- Compact layout modelled on the Figma "Beautiful Shadows" panel: paper stage with a draggable
+  sun-shaped light handle and a floating Drop Shadow sheet (`A °`, `D px`, `Light %`, `Soft px`).
+- Bottom bar reduced to colour swatch + Preview + Apply; mode, layers, opacity ramp, taper,
+  rasterize and diagnostics moved into **Advanced**.
+- Live `angle° · distance px` chip appears on the canvas while dragging.
+- Panel minimum size lowered to 340 × 460.
 
 ### 0.8.1
 
