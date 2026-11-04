@@ -17,7 +17,6 @@ const el = {
   kind: document.getElementById("kind"),
   darkness: document.getElementById("darkness"),
   colour: document.getElementById("colour"),
-  preview: document.getElementById("preview"),
   apply: document.getElementById("apply"),
   removePreview: document.getElementById("removePreview"),
   hint: document.getElementById("hint"),
@@ -68,7 +67,6 @@ function applyParamsToUi(params) {
 
 function setBusy(value) {
   busy = value;
-  el.preview.disabled = value;
   el.apply.disabled = value;
   el.removePreview.disabled = value;
 }
@@ -282,40 +280,15 @@ async function build() {
   return result;
 }
 
-async function runPreview() {
-  if (busy) return;
-  setBusy(true);
-  badge("Working…", "busy");
-  try {
-    lastParams = readParams();
-    await dropPreview();
-    setStatus("adding " + Shadow.STEPS + " drop shadows…");
-    await build();
-    badge("Preview", "busy");
-    setStatus("preview on the selected layer — Apply keeps it, Remove preview undoes it");
-  } catch (error) {
-    badge("Failed", "danger");
-    setStatus(errText(error));
-  } finally {
-    setBusy(false);
-  }
-}
-
 async function runApply() {
   if (busy) return;
   setBusy(true);
   badge("Working…", "busy");
   try {
     lastParams = readParams();
-    if (preview) {
-      preview = null; // keep what is already on the layer, stop offering undo
-      markPreview();
-    } else {
-      setStatus("adding " + Shadow.STEPS + " drop shadows…");
-      await build();
-      preview = null;
-      markPreview();
-    }
+    await dropPreview(); // a second Apply replaces the previous result instead of stacking
+    setStatus("adding " + Shadow.STEPS + " shadows…");
+    await build();
     await api.settings.set({ shadow: lastParams }).catch(() => {});
     badge("Applied", "ok");
     setStatus("shadow applied to the selected layer");
@@ -365,7 +338,6 @@ function wire() {
     input.addEventListener("input", () => scheduleDraw());
   }
   el.kind.addEventListener("change", () => scheduleDraw());
-  el.preview.addEventListener("click", () => void runPreview());
   el.apply.addEventListener("click", () => void runApply());
   el.removePreview.addEventListener("click", () => void runRemovePreview());
 }

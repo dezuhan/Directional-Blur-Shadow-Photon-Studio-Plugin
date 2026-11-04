@@ -22,11 +22,13 @@ A paper stage with a draggable **light handle** (sun with rays) and a floating *
 | `Light %` | 1–100 | 100 | Scales every layer's opacity (Figma's Brightness) |
 | `Soft %` | 1–100 | 75 | Scales the blur of every step |
 | `Type` | Drop shadow / Inner shadow | Drop shadow | Which layer style to write |
+| **Apply** | button | — | Writes the five shadows to the selected layer |
 
 Drag the sun to aim: the shadow falls on the **opposite** side, and an `angle° · distance px` chip
-follows the pointer. The bottom bar holds the colour swatch, **Preview** and **Apply**.
+follows the pointer. The bottom bar holds the colour swatch and **Apply**.
 
-Nothing is written to the document until Preview or Apply is pressed.
+Nothing is written to the document until Apply is pressed; **Remove shadows** restores the styles
+from before the last Apply. A second Apply replaces the previous result instead of stacking.
 
 ## Five fixed steps
 
@@ -95,6 +97,12 @@ styles snapshot/restore, and the single-write pipeline. A Preview sends **4 oper
 (`documents.active` ×2, `effect.describe`, `layer.effects.set`).
 
 ## Changelog
+
+### 0.13.1
+
+- **Preview removed.** With the styles written in a single call, Apply and Preview did the same work;
+  there is now one **Apply** button, and **Remove shadows** restores the snapshot taken before it.
+  Applying again replaces the previous result instead of stacking shadows.
 
 ### 0.13.0
 
