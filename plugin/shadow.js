@@ -211,7 +211,17 @@
     const bare = String(hex).replace("#", "").toUpperCase();
     if (format === "hex") return "#" + bare;
     if (format === "hex-bare") return bare;
-    return rgba(hex);
+    const rgb = rgba(hex);
+    if (format === "rgb255") {
+      // PSD layer-style colour: 0-255 integers, which is how a Photoshop-family document stores it
+      return {
+        r: Math.round(rgb.r * 255),
+        g: Math.round(rgb.g * 255),
+        b: Math.round(rgb.b * 255),
+        a: 255,
+      };
+    }
+    return rgb;
   }
 
   /**
@@ -259,7 +269,13 @@
       const defaultValue = meta && typeof meta.value === "number" ? meta.value : 1;
       out[opacityName] = defaultValue > 1 ? wantOpacity * 100 : wantOpacity;
     }
-    if (colourName) out[colourName] = colourValue(params.colour, format);
+    if (colourName) {
+      out[colourName] = colourValue(params.colour, format);
+    } else {
+      // effect.describe may list only the numeric parameters; the colour still has to reach the
+      // style, so fall back to the documented Photoshop key and let the format loop try each shape.
+      out.color = colourValue(params.colour, format);
+    }
     if (blendName) {
       const meta = map.get(blendName.toLowerCase());
       out[blendName] = typeof meta.value === "string" ? meta.value : "normal";
@@ -300,7 +316,8 @@
   function sameColour(left, right) {
     if (left && right && typeof left === "object" && typeof right === "object") {
       const keys = ["r", "g", "b", "a"];
-      return keys.every((key) => Math.abs((left[key] || 0) - (right[key] || 0)) < 0.01);
+      const scale = Math.max(left.r || 0, left.g || 0, left.b || 0, right.r || 0, right.g || 0, right.b || 0) > 1 ? 255 : 1;
+      return keys.every((key) => Math.abs((left[key] || 0) - (right[key] || 0)) <= scale / 128);
     }
     return String(left).replace("#", "").toUpperCase() === String(right).replace("#", "").toUpperCase();
   }
@@ -319,7 +336,7 @@
     const plan = planLayers(options.params);
     const kind = plan.params.kind;
     const key = kind === "innerShadow" ? "innerShadows" : "dropShadows";
-    const formats = ["rgb", "hex-bare", "hex"];
+    const formats = ["rgb255", "rgb", "hex-bare", "hex"];
 
     const doc = await api.documents.active();
     const layer = (doc.layers || []).find((item) => item.id === layerId);

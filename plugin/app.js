@@ -8,6 +8,7 @@
 
 const SDK = globalThis.__photonSdk;
 const Shadow = globalThis.PhotonShadow;
+const Colour = globalThis.PhotonColour;
 
 const el = {
   badge: document.getElementById("badge"),
@@ -23,6 +24,14 @@ const el = {
   status: document.getElementById("status"),
   meta: document.getElementById("meta"),
   previewCanvas: document.getElementById("previewCanvas"),
+  swatchBtn: document.getElementById("swatchBtn"),
+  swatchDot: document.getElementById("swatchDot"),
+  picker: document.getElementById("picker"),
+  svCanvas: document.getElementById("svCanvas"),
+  hueCanvas: document.getElementById("hueCanvas"),
+  hexInput: document.getElementById("hexInput"),
+  colourOk: document.getElementById("colourOk"),
+  colourCancel: document.getElementById("colourCancel"),
 };
 
 let api = null;
@@ -31,6 +40,7 @@ let busy = false;
 let dragging = false;
 let drawFrame = null;
 let lastParams = { ...Shadow.DEFAULTS };
+let hsv = { h: 0, s: 0, v: 0 };
 
 function badge(text, kind) {
   el.badge.textContent = text;
@@ -234,6 +244,122 @@ function handlePointer(event) {
   scheduleDraw();
 }
 
+/* ---------- colour picker ---------- */
+
+function setColour(hex, options) {
+  const normalised = Colour.normaliseHex(hex);
+  if (!normalised) return;
+  el.colour.value = normalised;
+  el.swatchDot.style.background = normalised;
+  if (el.hexInput !== document.activeElement) el.hexInput.value = normalised;
+  const rgb = Colour.hexToRgb(normalised);
+  hsv = Colour.rgbToHsv(rgb);
+  drawPicker();
+  if (!(options && options.quiet)) scheduleDraw();
+}
+
+function drawPicker() {
+  const hue = el.hueCanvas.getContext("2d");
+  if (hue) {
+    const gradient = hue.createLinearGradient(0, 0, 0, el.hueCanvas.height);
+    for (let stop = 0; stop <= 6; stop += 1) {
+      const rgb = Colour.hsvToRgb({ h: (stop / 6) * 360, s: 1, v: 1 });
+      gradient.addColorStop(stop / 6, Colour.rgbToHex(rgb));
+    }
+    hue.fillStyle = gradient;
+    hue.fillRect(0, 0, el.hueCanvas.width, el.hueCanvas.height);
+    const y = (hsv.h / 360) * el.hueCanvas.height;
+    hue.strokeStyle = "#ffffff";
+    hue.lineWidth = 1.5;
+    hue.strokeRect(0.75, Math.min(el.hueCanvas.height - 2, Math.max(0, y - 2)), el.hueCanvas.width - 1.5, 4);
+  }
+
+  const sv = el.svCanvas.getContext("2d");
+  if (sv) {
+    const base = Colour.hsvToRgb({ h: hsv.h, s: 1, v: 1 });
+    sv.fillStyle = Colour.rgbToHex(base);
+    sv.fillRect(0, 0, el.svCanvas.width, el.svCanvas.height);
+    const white = sv.createLinearGradient(0, 0, el.svCanvas.width, 0);
+    white.addColorStop(0, "rgba(255,255,255,1)");
+    white.addColorStop(1, "rgba(255,255,255,0)");
+    sv.fillStyle = white;
+    sv.fillRect(0, 0, el.svCanvas.width, el.svCanvas.height);
+    const black = sv.createLinearGradient(0, 0, 0, el.svCanvas.height);
+    black.addColorStop(0, "rgba(0,0,0,0)");
+    black.addColorStop(1, "rgba(0,0,0,1)");
+    sv.fillStyle = black;
+    sv.fillRect(0, 0, el.svCanvas.width, el.svCanvas.height);
+
+    const x = hsv.s * el.svCanvas.width;
+    const y = (1 - hsv.v) * el.svCanvas.height;
+    sv.beginPath();
+    sv.arc(x, y, 5, 0, Math.PI * 2);
+    sv.lineWidth = 1.6;
+    sv.strokeStyle = "rgba(0,0,0,0.55)";
+    sv.stroke();
+    sv.strokeStyle = "#ffffff";
+    sv.lineWidth = 1;
+    sv.stroke();
+  }
+}
+
+function pickFromSv(event) {
+  const rect = el.svCanvas.getBoundingClientRect();
+  const point = Colour.pointToSaturation(
+    ((event.clientX - rect.left) / rect.width) * el.svCanvas.width,
+    ((event.clientY - rect.top) / rect.height) * el.svCanvas.height,
+    el.svCanvas.width,
+    el.svCanvas.height,
+  );
+  const next = { h: hsv.h, s: point.s, v: point.v };
+  hsv = next;
+  setColour(Colour.rgbToHex(Colour.hsvToRgb(next)), { quiet: true });
+  scheduleDraw();
+}
+
+function pickFromHue(event) {
+  const rect = el.hueCanvas.getBoundingClientRect();
+  const y = ((event.clientY - rect.top) / rect.height) * el.hueCanvas.height;
+  const next = { h: Colour.pointToHue(y, el.hueCanvas.height), s: hsv.s, v: hsv.v };
+  hsv = next;
+  setColour(Colour.rgbToHex(Colour.hsvToRgb(next)), { quiet: true });
+  scheduleDraw();
+}
+
+function openPicker() {
+  el.picker.hidden = false;
+  setColour(el.colour.value, { quiet: true });
+}
+
+function closePicker() {
+  el.picker.hidden = true;
+}
+
+function wireColourPicker() {
+  el.swatchBtn.addEventListener("click", () => {
+    if (el.picker.hidden) openPicker();
+    else closePicker();
+  });
+  el.colourOk.addEventListener("click", closePicker);
+  el.colourCancel.addEventListener("click", () => {
+    setColour(lastParams.colour || Shadow.DEFAULTS.colour);
+    closePicker();
+  });
+  el.hexInput.addEventListener("input", () => setColour(el.hexInput.value));
+
+  const drag = (canvas, handler) => {
+    canvas.addEventListener("pointerdown", (event) => {
+      if (canvas.setPointerCapture) canvas.setPointerCapture(event.pointerId);
+      handler(event);
+    });
+    canvas.addEventListener("pointermove", (event) => {
+      if (event.buttons) handler(event);
+    });
+  };
+  drag(el.svCanvas, pickFromSv);
+  drag(el.hueCanvas, pickFromHue);
+}
+
 /* ---------- document actions ---------- */
 
 async function selectedLayer() {
@@ -315,6 +441,7 @@ async function runRemovePreview() {
 /* ---------- wiring ---------- */
 
 function wire() {
+  wireColourPicker();
   const canvas = el.previewCanvas;
   if (canvas) {
     canvas.addEventListener("pointerdown", (event) => {
@@ -350,6 +477,7 @@ async function init() {
     stored = {};
   }
   applyParamsToUi(Shadow.normalise({ ...Shadow.DEFAULTS, ...(stored.shadow || {}) }));
+  setColour(el.colour.value, { quiet: true });
   badge("Ready", "ok");
   setStatus("drag the light, then Preview");
   drawPreview();

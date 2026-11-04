@@ -52,7 +52,14 @@ function fakeApi(options) {
           const added = params.styles[key].slice((previous[key] || []).length);
           const first = added[0] || {};
           const value = first.color === undefined ? first.colour : first.color;
-          const encoding = typeof value === "object" ? "rgb" : String(value).startsWith("#") ? "hex" : "hex-bare";
+          const encoding =
+            typeof value === "object"
+              ? value.r > 1 || value.a > 1
+                ? "rgb255"
+                : "rgb"
+              : String(value).startsWith("#")
+                ? "hex"
+                : "hex-bare";
           const stored = JSON.parse(JSON.stringify(params.styles));
           if (!accept(encoding)) {
             const start = (previous[key] || []).length;
@@ -219,7 +226,7 @@ test("applyLayerStyles writes five drop shadows onto the selected layer", async 
 
   assert.equal(result.kind, "dropShadow");
   assert.equal(result.effects, 5);
-  assert.equal(result.colourFormat, "rgb");
+  assert.equal(result.colourFormat, "rgb255", "PSD-style 0-255 colour is tried first");
   assert.equal(api.calls.filter((c) => c.operation === "layer.duplicate").length, 0, "no duplicate layer");
   assert.equal(api.calls.find((c) => c.operation === "effect.describe").params.kind, "dropShadow");
 
@@ -261,12 +268,12 @@ test("applyLayerStyles keeps the layer's existing effects", async () => {
 });
 
 test("applyLayerStyles retries the colour encoding until it sticks", async () => {
-  const api = fakeApi({ acceptColour: (encoding) => encoding === "hex-bare" });
+  const api = fakeApi({ acceptColour: (encoding) => encoding === "rgb" });
   const result = await Shadow.applyLayerStyles(api, { documentId: "doc-1", layerId: "src", params: {} });
 
   const sets = api.calls.filter((c) => c.operation === "layer.effects.set");
-  assert.equal(sets.length, 2, "rgb rejected, bare hex accepted");
-  assert.equal(result.colourFormat, "hex-bare");
+  assert.equal(sets.length, 2, "rgb255 rejected, the 0-1 rgb object accepted");
+  assert.equal(result.colourFormat, "rgb");
 });
 
 test("restoreLayerStyles puts the snapshot back", async () => {
@@ -283,6 +290,39 @@ test("restoreLayerStyles puts the snapshot back", async () => {
 });
 
 /* ------------------------------------------------------------------ runner */
+
+
+test("colour encodings include the PSD 0-255 form", () => {
+  const host = {
+    params: [
+      { name: "color", default: "000000" },
+      { name: "opacity", default: 75 },
+      { name: "angle", default: 120 },
+      { name: "distance", default: 5 },
+      { name: "size", default: 5 },
+    ],
+  };
+  const at = (format) =>
+    Shadow.effectParams(host, { distance: 5, blur: 5, opacity: 0.5 }, { angle: 0, colour: "#FFA8A8" }, { colourFormat: format }).color;
+  assert.deepEqual(at("rgb255"), { r: 255, g: 168, b: 168, a: 255 });
+  assert.equal(at("hex-bare"), "FFA8A8");
+  assert.deepEqual(at("rgb"), { space: "rgb", r: 1, g: 168 / 255, b: 168 / 255, a: 1 });
+  assert.equal(Shadow.sameColour({ r: 255, g: 168, b: 168, a: 255 }, { r: 255, g: 168, b: 168, a: 255 }), true);
+});
+
+
+test("the colour is still sent when describe lists no colour parameter", () => {
+  const host = {
+    params: [
+      { name: "opacity", default: 75 },
+      { name: "angle", default: 120 },
+      { name: "distance", default: 5 },
+      { name: "size", default: 5 },
+    ],
+  };
+  const out = Shadow.effectParams(host, { distance: 10, blur: 5, opacity: 0.5 }, { angle: 0, colour: "#FFA8A8" }, { colourFormat: "rgb255" });
+  assert.deepEqual(out.color, { r: 255, g: 168, b: 168, a: 255 });
+});
 
 (async () => {
   let failed = 0;

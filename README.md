@@ -25,7 +25,8 @@ A paper stage with a draggable **light handle** (sun with rays) and a floating *
 | **Apply** | button | — | Writes the five shadows to the selected layer |
 
 Drag the sun to aim: the shadow falls on the **opposite** side, and an `angle° · distance px` chip
-follows the pointer. The bottom bar holds the colour swatch and **Apply**.
+follows the pointer. The bottom bar holds the **colour swatch** and **Apply**; clicking the swatch
+opens the plugin's own colour picker (saturation/brightness square, hue strip, hex field, OK/Cancel).
 
 Nothing is written to the document until Apply is pressed; **Remove shadows** restores the styles
 from before the last Apply. A second Apply replaces the previous result instead of stacking.
@@ -63,7 +64,9 @@ Three details that took measurement rather than guessing:
    Positional hosts (`x`/`y`, like the Figma plugin) are supported too.
 2. **Angle is the light direction on a Photoshop dial** (0° right, 90° up), so a shadow pointing at
    θ is written as `180 − θ`. `effectAngle` is unit-tested for 0/90/180/270 and 32.1 → 147.9.
-3. **Colour encoding is verified.** `layer.effects.set` does not document its colour shape, so the
+3. **Colour encoding is verified.** The first attempt is the PSD-style `{r,g,b,a}` object with
+   **0–255** integers (how a Photoshop-family document stores a layer style), then the 0–1
+   `{space:"rgb"}` object, then bare `RRGGBB`, then `#RRGGBB` — see next point. `layer.effects.set` does not document its colour shape, so the
    write is read back: if the colour did not stick, the plugin retries with the next encoding
    (`{space:"rgb"}` object → bare `RRGGBB` → `#RRGGBB`) and stops at the first one the host keeps.
    When the document model does not expose styles, the RGB object (the same shape `pixels.fill`
@@ -97,6 +100,23 @@ styles snapshot/restore, and the single-write pipeline. A Preview sends **4 oper
 (`documents.active` ×2, `effect.describe`, `layer.effects.set`).
 
 ## Changelog
+
+### 0.14.1
+
+- If `effect.describe` lists only the numeric parameters, the colour is still written under the
+  documented Photoshop key `color` (then verified/retried like the described case) instead of being
+  dropped from the payload — a payload without a colour key is why a picked colour could keep the
+  host's black default.
+
+### 0.14.0
+
+- **Custom colour picker.** The native `<input type="color">` is gone: the swatch now opens a panel
+  picker with a saturation/brightness square, a hue strip, a hex field and OK/Cancel
+  (`plugin/colour.js`, unit-tested).
+- **The colour is sent as a PSD-style `{r,g,b,a}` 0–255 object first**, then the 0–1 rgb object, then
+  bare hex, then `#hex`; each attempt is read back and the next is tried when the colour did not
+  stick. `sameColour` compares both scales.
+- Tests: 26 (20 shadow + 6 colour).
 
 ### 0.13.1
 
