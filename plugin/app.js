@@ -150,9 +150,12 @@ async function runPreview() {
     const { doc, layerId } = await selectedLayer();
     const mode = readMode();
     setStatus(mode === "effects" ? "adding " + lastParams.steps + " drop shadows…" : "building " + lastParams.steps + " layers…");
+    const startedAt = performance.now();
     preview = await buildFor(doc, layerId, lastParams, mode);
+    const elapsed = Math.round(performance.now() - startedAt);
     preview.mode = mode;
     drawPreview();
+    el.meta.textContent = elapsed + " ms · " + (preview.effects || preview.layerIds.length) + " item(s)";
     badge("Preview", "busy");
     setStatus(
       mode === "effects"
@@ -188,6 +191,7 @@ async function runApply() {
       preview.mode = mode;
     }
 
+    const applyStart = performance.now();
     if (mode === "copies" && lastParams.rasterize && preview.groupId) {
       setStatus("rasterizing…");
       await api.documents.execute(
@@ -199,6 +203,7 @@ async function runApply() {
     await api.settings.set({ shadow: lastParams }).catch(() => {});
     badge("Applied", "ok");
     setStatus("shadow placed behind the selected layer");
+    el.meta.textContent = Math.round(performance.now() - applyStart) + " ms apply";
     const kept = preview;
     preview = null; // applied, nothing left to "remove"
     await markPreview();

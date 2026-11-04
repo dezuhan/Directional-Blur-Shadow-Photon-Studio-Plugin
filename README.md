@@ -118,6 +118,11 @@ from that. The shadow therefore lands directly behind the subject in either conv
 
 ## Changelog
 
+### 0.8.1
+
+- The panel now shows the real build time in its footer (`NNN ms · N item(s)`), so the numbers in
+  the app can be compared with `tools/bench.cjs`.
+
 ### 0.8.0
 
 - Opacity ramp is normalised so the nearest layer lands exactly on Start opacity and the farthest
