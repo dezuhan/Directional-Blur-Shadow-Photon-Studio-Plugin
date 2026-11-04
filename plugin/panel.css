@@ -806,7 +806,18 @@ select.input option {
   width: 100%;
   min-width: 0;
   max-width: 100%;
-  overflow: hidden;
+}
+
+/* the old `.mini span` label rule must not grey out the custom select value */
+.mini .select-value {
+  color: var(--sh-text);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.mini .select-trigger {
+  font-size: 11px;
 }
 
 .mini select {

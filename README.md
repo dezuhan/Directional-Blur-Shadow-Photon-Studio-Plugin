@@ -74,6 +74,13 @@ MIT licensed — see [LICENSE](LICENSE).
 
 ## Changelog
 
+### 0.15.1
+
+- Fixed the custom dropdown: the select wrapper no longer clips the popup, and the trigger/value
+  uses the design-system text colour instead of inheriting the small-label grey.
+- Stored angles and distances are rounded to one decimal, so old settings no longer render as
+  `213.20000000000005`; dragged values already were rounded.
+
 ### 0.15.0
 
 - Values use a clean 2x2 grid (label + compact field, 100 % width) like Photon's own property rows.

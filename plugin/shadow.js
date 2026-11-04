@@ -81,8 +81,8 @@
   function normalise(input) {
     const params = { ...DEFAULTS, ...(input || {}) };
     return {
-      angle: ((clamp(params.angle, 0, 360) % 360) + 360) % 360,
-      distance: clamp(params.distance, 1, 300),
+      angle: Math.round((((clamp(params.angle, 0, 360) % 360) + 360) % 360) * 10) / 10,
+      distance: Math.round(clamp(params.distance, 1, 300) * 10) / 10,
       soft: clamp(params.soft, 1, 100),
       colour: /^#[0-9a-f]{6}$/i.test(String(params.colour)) ? params.colour : DEFAULTS.colour,
       darkness: clamp(params.darkness, 1, 100),
