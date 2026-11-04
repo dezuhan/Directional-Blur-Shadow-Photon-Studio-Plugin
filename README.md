@@ -75,6 +75,16 @@ MIT licensed — see [LICENSE](LICENSE).
 
 ## Changelog
 
+### 0.18.4
+
+- The picker is shown before the canvases are measured, so the full-width HSV field renders its
+  gradients correctly instead of stretching a 1x1 hidden canvas.
+
+### 0.18.3
+
+- The colour picker now spans 100% of the panel width; the saturation/brightness field stretches to
+  fill the row and keeps its canvas backing store in sync so the gradient/pointer are accurate.
+
 ### 0.18.2
 
 - The preview stage is now full width with a 340 px height cap; when the height limit is reached

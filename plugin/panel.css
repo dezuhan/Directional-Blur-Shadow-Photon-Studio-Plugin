@@ -283,6 +283,7 @@ input:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  width: 100%;
   padding: 8px;
   border-radius: var(--sh-radius);
   background: var(--ph-glass-plate-strong, rgba(12, 12, 12, 0.92));
@@ -291,15 +292,33 @@ input:focus-visible {
 
 .picker-body {
   display: flex;
+  align-items: stretch;
   gap: 6px;
+  width: 100%;
 }
 
 #svCanvas,
 #hueCanvas {
   display: block;
+  height: 116px;
   border-radius: 5px;
   cursor: crosshair;
   touch-action: none;
+}
+
+#svCanvas {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+}
+
+#hueCanvas {
+  flex: none;
+  width: 14px;
+}
+
+.picker-foot {
+  width: 100%;
 }
 
 .picker-foot {

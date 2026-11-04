@@ -466,7 +466,20 @@ function setColour(hex, options) {
   if (!(options && options.quiet)) scheduleDraw();
 }
 
+function syncPickerCanvas(canvas) {
+  const box = canvas.getBoundingClientRect();
+  const ratio = Math.min(2, window.devicePixelRatio || 1);
+  const width = Math.max(1, Math.round(box.width * ratio));
+  const height = Math.max(1, Math.round(box.height * ratio));
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width;
+    canvas.height = height;
+  }
+}
+
 function drawPicker() {
+  syncPickerCanvas(el.svCanvas);
+  syncPickerCanvas(el.hueCanvas);
   const hue = el.hueCanvas.getContext("2d");
   if (hue) {
     const gradient = hue.createLinearGradient(0, 0, 0, el.hueCanvas.height);
@@ -541,8 +554,9 @@ function openPicker(target) {
   const current = Colour.normaliseHex(pickerTarget === "card" ? objectColour : el.colour.value) || "#000000";
   hsv = Colour.rgbToHsv(Colour.hexToRgb(current));
   if (el.hexInput !== document.activeElement) el.hexInput.value = current;
-  drawPicker();
+  // Unhide first: the canvases now size their backing store from the visible CSS box.
   el.picker.hidden = false;
+  drawPicker();
 }
 
 function closePicker() {
