@@ -243,6 +243,19 @@ function roundRect(ctx, x, y, width, height, radius) {
   ctx.closePath();
 }
 
+let drawFrame = null;
+
+/** Coalesce redraws into one animation frame (a drag fires many pointermove events). */
+function scheduleDraw() {
+  if (drawFrame !== null) return;
+  const raf =
+    typeof requestAnimationFrame === "function" ? requestAnimationFrame : (callback) => setTimeout(callback, 16);
+  drawFrame = raf(() => {
+    drawFrame = null;
+    drawPreview();
+  });
+}
+
 function drawPreview() {
   const canvas = el.previewCanvas;
   const ctx = canvas.getContext("2d");
@@ -323,7 +336,7 @@ function handlePointer(event) {
   const vector = Shadow.vectorToAngleDistance((x - centre.x) / SCALE, (y - centre.y) / SCALE, 2000);
   el.angle.value = String(vector.angle);
   el.distance.value = String(vector.distance);
-  drawPreview();
+  scheduleDraw();
 }
 
 async function inspectEffects() {
@@ -384,7 +397,7 @@ function wire() {
     canvas.addEventListener("pointerleave", stop);
   }
   for (const input of [el.angle, el.distance, el.steps, el.blur, el.colour, el.darkness, el.startOpacity, el.endOpacity, el.taperEnd]) {
-    input.addEventListener("input", () => drawPreview());
+    input.addEventListener("input", () => scheduleDraw());
   }
   el.inspect.addEventListener("click", () => void inspectEffects());
   el.preview.addEventListener("click", () => void runPreview());

@@ -18,8 +18,8 @@ selected layer in a chosen direction, blurring, fading and optionally tapering a
 | Softness (px) | 1–300 | **26** | Blur at the far end of the shadow |
 | Colour | hex | #000000 | Silhouette colour |
 | Lighting strength (%) | 10–300 | 100 | Multiplies the whole falloff |
-| Start opacity (%) | 1–100 | 100 | Opacity target nearest the layer |
-| End opacity (%) | 0–100 | **5** | Opacity target at the far end |
+| Start opacity (%) | 1–100 | **44** | Opacity target nearest the layer |
+| End opacity (%) | 0–100 | **1** | Opacity target at the far end |
 | Taper (narrow/expand) | on/off | off | Scales each copy perpendicular to the direction |
 | Size at tip (%) | 1–500 | 90 | Taper amount at the far end |
 | Rasterize into one layer | on/off | on | Applied only when you press Apply |
@@ -30,11 +30,11 @@ The defaults reproduce the Figma plugin's 5-shadow ramp:
 
 | Layer | Offset (px) | Blur (px) | Opacity |
 | --- | --- | --- | --- |
-| 1 (far) | 150 | 26 | 5% |
-| 2 | 96 | 22 | 14% |
-| 3 | 54 | 18 | 34% |
-| 4 | 24 | 14 | 62% |
-| 5 (near) | 6 | 8 | 100% |
+| 1 (far) | 150 | 26 | 1% |
+| 2 | 96 | 22 | 9% |
+| 3 | 54 | 18 | 22% |
+| 4 | 24 | 14 | 30% |
+| 5 (near) | 6 | 8 | 44% |
 
 Offset grows with `t²`, blur with `t^0.7`, opacity with `(1 − t)²` (t = 1 at the far end).
 Drop-shadow layer styles use the ramp value directly; the copies mode still normalises each
@@ -117,6 +117,25 @@ from that. The shadow therefore lands directly behind the subject in either conv
   preview on screen leaves it behind — press **Remove preview** first.
 
 ## Changelog
+
+### 0.8.0
+
+- Opacity ramp is normalised so the nearest layer lands exactly on Start opacity and the farthest
+  on End opacity. Before, `(1 − t)²` never reached "start": 44 % was sent as 29 %.
+- Canvas redraws are coalesced into one animation frame, so dragging the handle no longer triggers
+  a redraw per `pointermove` event.
+- `tools/bench.cjs` added — prints µs per ramp/taper call, operation counts per action and the
+  simulated round-trip cost, so performance discussions use measurements instead of guesses.
+
+### 0.7.1
+
+- Default opacities now match Beautiful Shadows (**44 % near → 1 % far**) instead of 100 % → 5 %.
+  A 100 % start made the closest drop shadow almost solid, which looked like "some shadows are at
+  100 %".
+- The preview layer's **inherited layer styles are cleared** before the new drop shadows are
+  appended (`layer.effects.clear`). A duplicate copies the source layer's effects, so old shadows
+  at their own opacity piled up under the new ones.
+- Tests: 24 (now asserting that clearing happens before the appends).
 
 ### 0.7.0
 

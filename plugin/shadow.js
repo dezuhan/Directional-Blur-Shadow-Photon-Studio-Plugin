@@ -24,8 +24,8 @@
     steps: 5,
     blur: 26,
     colour: "#000000",
-    startOpacity: 100,
-    endOpacity: 5,
+    startOpacity: 44,
+    endOpacity: 1,
     darkness: 100,
     taper: false,
     taperEnd: 90,
@@ -84,7 +84,10 @@
       const t = step / params.steps;
       const easedDistance = t * t;
       const easedBlur = Math.pow(t, 0.7);
-      const target = clamp(end + (start - end) * Math.pow(1 - t, 2), 0, 1);
+      // Normalise the ramp so the nearest layer lands exactly on startOpacity and the farthest on
+      // endOpacity: without this the (1 - t)^2 curve never reaches "start" (44 % became 29 %).
+      const rampT = params.steps === 1 ? 0 : (t - 1 / params.steps) / (1 - 1 / params.steps);
+      const target = clamp(end + (start - end) * Math.pow(1 - rampT, 2), 0, 1);
       const raw = direct ? target : 1 - Math.pow(1 - target, 1 / params.steps);
       layers.push({
         step,
@@ -451,6 +454,15 @@
     const duplicated = await execute(api, documentId, "layer.duplicate", { layerIds: [sourceLayerId] });
     const layerId = firstId(duplicated);
     if (!layerId) throw new Error("Photon did not return the duplicated layer id.");
+
+    // The duplicate inherits the source layer's layer styles. Clear them first, otherwise the
+    // inherited drop shadows stay at their own (often 100%) opacity and stack on top of ours —
+    // that is what made a few shadows look fully opaque.
+    try {
+      await execute(api, documentId, "layer.effects.clear", { layerIds: [layerId] });
+    } catch {
+      /* the op may be unavailable; the shadow still builds */
+    }
 
     // Hide the copy's own pixels: only its effects should be visible.
     await execute(api, documentId, "layer.update", {

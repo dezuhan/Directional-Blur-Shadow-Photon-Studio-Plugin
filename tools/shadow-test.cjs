@@ -66,8 +66,7 @@ test("planLayers defaults to 5 layers and eases the ramps", () => {
   const far = layers[0];
   const near = layers[layers.length - 1];
   assert.ok(Math.abs(far.target - 0.05) < 1e-9, "farthest layer sits on endOpacity");
-  // t = 0.2 → target = 0.05 + 0.95 * (0.8)^2 = 0.658
-  assert.ok(Math.abs(near.target - 0.658) < 1e-3, "nearest layer sits on the eased ramp");
+  assert.ok(Math.abs(near.target - 1) < 1e-9, "nearest layer lands exactly on startOpacity");
   assert.ok(far.blur > near.blur, "farther layers blur more");
   for (let index = 1; index < layers.length; index += 1) {
     assert.ok(layers[index].opacity >= layers[index - 1].opacity, "opacity grows towards the object");
@@ -238,6 +237,7 @@ function effectsApi(described) {
       execute: async (operation, params) => {
         calls.push({ operation, params });
         if (operation === "effect.describe") return described;
+        if (operation === "layer.effects.clear") return { ok: true };
         if (operation === "layer.duplicate") {
           duplicateCount += 1;
           const id = "fx" + duplicateCount;
@@ -305,6 +305,11 @@ test("buildWithEffects appends one drop shadow per step on a single hidden-copy 
   const update = calls.find((c) => c.operation === "layer.update");
   assert.equal(update.params.properties.fillOpacity, 0, "the copy's own pixels are hidden");
   assert.equal(update.params.properties.name, Shadow.GROUP_NAME);
+
+  const cleared = calls.findIndex((c) => c.operation === "layer.effects.clear");
+  const firstEffect = calls.findIndex((c) => c.operation === "layer.effect.set");
+  assert.ok(cleared >= 0, "inherited layer styles are cleared on the copy");
+  assert.ok(cleared < firstEffect, "clearing happens before the new shadows are appended");
 
   const effects = calls.filter((c) => c.operation === "layer.effect.set");
   assert.equal(effects.length, 6, "one append per step");
@@ -434,6 +439,15 @@ test("unmappable parameters report the discovered keys", () => {
     assert.match(error.message, /zap, zop/);
     assert.equal(error.code, "EFFECT_MAPPING_EMPTY");
   }
+});
+
+
+test("direct-mode opacities span startOpacity to endOpacity", () => {
+  const { layers } = Shadow.planLayers({ steps: 5, startOpacity: 44, endOpacity: 1 }, "direct");
+  const percent = layers.map((layer) => Math.round(layer.opacity * 100));
+  assert.equal(percent[0], 1, "farthest layer is endOpacity");
+  assert.equal(percent[4], 44, "nearest layer is startOpacity");
+  assert.deepEqual(percent, [1, 4, 12, 25, 44]);
 });
 
 (async () => {
