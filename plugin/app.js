@@ -19,7 +19,9 @@ const el = {
   soft: document.getElementById("soft"),
   kind: document.getElementById("kind"),
   blend: document.getElementById("blend"),
-  cardColour: document.getElementById("cardColour"),
+  cardSwatchBtn: document.getElementById("cardSwatchBtn"),
+  cardSwatchDot: document.getElementById("cardSwatchDot"),
+  pickerTitle: document.getElementById("pickerTitle"),
   darkness: document.getElementById("darkness"),
   colour: document.getElementById("colour"),
   apply: document.getElementById("apply"),
@@ -315,11 +317,20 @@ function handlePointer(event) {
 
 /* ---------- colour picker ---------- */
 
+let pickerTarget = "shadow";
+let pickerBefore = null;
+
+function syncSwatches() {
+  el.swatchDot.style.background = el.colour.value;
+  el.cardSwatchDot.style.background = objectColour;
+}
+
 function setColour(hex, options) {
   const normalised = Colour.normaliseHex(hex);
   if (!normalised) return;
-  el.colour.value = normalised;
-  el.swatchDot.style.background = normalised;
+  if (pickerTarget === "card") objectColour = normalised;
+  else el.colour.value = normalised;
+  syncSwatches();
   if (el.hexInput !== document.activeElement) el.hexInput.value = normalised;
   const rgb = Colour.hexToRgb(normalised);
   hsv = Colour.rgbToHsv(rgb);
@@ -395,9 +406,15 @@ function pickFromHue(event) {
   scheduleDraw();
 }
 
-function openPicker() {
+function openPicker(target) {
+  pickerTarget = target === "card" ? "card" : "shadow";
+  pickerBefore = pickerTarget === "card" ? objectColour : el.colour.value;
+  el.pickerTitle.textContent = pickerTarget === "card" ? "Box colour" : "Shadow colour";
+  const current = Colour.normaliseHex(pickerTarget === "card" ? objectColour : el.colour.value) || "#000000";
+  hsv = Colour.rgbToHsv(Colour.hexToRgb(current));
+  if (el.hexInput !== document.activeElement) el.hexInput.value = current;
+  drawPicker();
   el.picker.hidden = false;
-  setColour(el.colour.value, { quiet: true });
 }
 
 function closePicker() {
@@ -405,13 +422,15 @@ function closePicker() {
 }
 
 function wireColourPicker() {
-  el.swatchBtn.addEventListener("click", () => {
-    if (el.picker.hidden) openPicker();
-    else closePicker();
-  });
+  const toggle = (target) => {
+    if (!el.picker.hidden && pickerTarget === target) closePicker();
+    else openPicker(target);
+  };
+  el.swatchBtn.addEventListener("click", () => toggle("shadow"));
+  el.cardSwatchBtn.addEventListener("click", () => toggle("card"));
   el.colourOk.addEventListener("click", closePicker);
   el.colourCancel.addEventListener("click", () => {
-    setColour(lastParams.colour || Shadow.DEFAULTS.colour);
+    setColour(pickerBefore || (pickerTarget === "card" ? "#f7f7f7" : Shadow.DEFAULTS.colour));
     closePicker();
   });
   el.hexInput.addEventListener("input", () => setColour(el.hexInput.value));
@@ -516,9 +535,7 @@ function wire() {
     canvas.addEventListener("pointerdown", (event) => {
       const point = canvasPoint(event);
       if (insideCard(point)) {
-        el.cardColour.value = objectColour;
-        if (typeof el.cardColour.showPicker === "function") el.cardColour.showPicker();
-        else el.cardColour.click();
+        openPicker("card");
         return;
       }
       dragging = true;
@@ -542,12 +559,6 @@ function wire() {
   }
   el.kind.addEventListener("change", () => scheduleDraw());
   el.blend.addEventListener("change", () => scheduleDraw());
-  el.cardColour.addEventListener("input", () => {
-    const next = Colour.normaliseHex(el.cardColour.value);
-    if (!next) return;
-    objectColour = next;
-    scheduleDraw();
-  });
   el.apply.addEventListener("click", () => void runApply());
   el.removePreview.addEventListener("click", () => void runRemovePreview());
 }
@@ -562,7 +573,6 @@ async function init() {
   applyParamsToUi(Shadow.normalise({ ...Shadow.DEFAULTS, ...(stored.shadow || {}) }));
   const rememberedCard = stored.preview && Colour.normaliseHex(stored.preview.objectColour);
   objectColour = rememberedCard || "#f7f7f7";
-  el.cardColour.value = objectColour;
   setColour(el.colour.value, { quiet: true });
   badge("Ready", "ok");
   setStatus("drag the light, then Preview");

@@ -92,10 +92,12 @@
         </p>
       </div>
 
-<input id="cardColour" type="color" value="#f7f7f7" hidden />
 
 
       <div class="actions">
+        <button id="cardSwatchBtn" class="swatch square" type="button" title="Preview box colour">
+          <span id="cardSwatchDot" class="swatch-dot"></span>
+        </button>
         <button id="swatchBtn" class="swatch" type="button" title="Shadow colour">
           <span id="swatchDot" class="swatch-dot"></span>
         </button>
@@ -104,6 +106,7 @@
       </div>
 
       <div id="picker" class="picker" hidden>
+        <span id="pickerTitle" class="picker-title">Shadow colour</span>
         <div class="picker-body">
           <canvas id="svCanvas" width="196" height="116" aria-label="Saturation and brightness"></canvas>
           <canvas id="hueCanvas" width="14" height="116" aria-label="Hue"></canvas>

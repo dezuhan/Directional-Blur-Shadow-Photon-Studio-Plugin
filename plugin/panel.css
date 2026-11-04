@@ -266,6 +266,19 @@ input:focus-visible {
   background: var(--sh-raise), var(--sh-control-hover);
 }
 
+/* rounded square = preview box colour, round = shadow colour */
+.swatch.square,
+.swatch.square .swatch-dot {
+  border-radius: 7px;
+}
+
+.picker-title {
+  color: var(--sh-muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
 .picker {
   display: flex;
   flex-direction: column;

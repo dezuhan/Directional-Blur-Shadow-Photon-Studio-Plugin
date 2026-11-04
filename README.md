@@ -43,8 +43,9 @@ previous result instead of stacking.
 | `Soft %` | 1–100 | 75 | Scales the blur of every step |
 | `Type` | Drop / Inner shadow | Drop | Which layer style to write |
 | `Blend` | Photoshop blend list | Normal | Forwarded to the host when layer styles expose a blend parameter; the preview always shows it |
-| white card | click | `#f7f7f7` | Click it in the preview to pick the preview object's colour |
-| swatch | picker | black | Shadow colour (own HSV picker, verified against Photon) |
+| square swatch | custom picker | `#f7f7f7` | Preview box colour; also opens by clicking the white card |
+| round swatch | custom picker | black | Shadow colour |
+| white card | click | `#f7f7f7` | Opens the box-colour picker |
 
 Five fixed steps (farthest → nearest). Offsets are `distance × 1 / .64 / .36 / .16 / .04`, opacities
 `lighting × 2 / 15 / 50 / 85 / 98 %`, and each shadow has its **own blur**:
@@ -73,6 +74,12 @@ An Apply sends four operations: `documents.active` ×2, `effect.describe`, `laye
 MIT licensed — see [LICENSE](LICENSE).
 
 ## Changelog
+
+### 0.17.0
+
+- The box colour gets its own rounded-square swatch immediately left of the round shadow swatch.
+  Both open the same custom HSV picker; the picker title says whether it edits the shadow or the
+  preview box. Clicking the white card opens the box picker instead of the native colour dialog.
 
 ### 0.16.3
 
