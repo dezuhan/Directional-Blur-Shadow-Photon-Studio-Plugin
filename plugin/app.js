@@ -313,9 +313,10 @@ function drawPreview() {
 
   // light handle: a small sun whose rays point away from the card
   const reach = Math.min(74, Math.max(26, params.distance * SCALE));
-  const angleRad = (params.angle * Math.PI) / 180;
-  const hx = centre.x + Math.cos(angleRad) * reach;
-  const hy = centre.y + Math.sin(angleRad) * reach;
+  // the light sits opposite the shadow: angle is the shadow direction, the sun is at angle + 180
+  const lightRad = ((params.angle + 180) * Math.PI) / 180;
+  const hx = centre.x + Math.cos(lightRad) * reach;
+  const hy = centre.y + Math.sin(lightRad) * reach;
 
   ctx.save();
   ctx.strokeStyle = "rgba(43,108,246,0.35)";
@@ -337,7 +338,7 @@ function drawPreview() {
 
   ctx.lineWidth = 1.3;
   for (let ray = 0; ray < 8; ray += 1) {
-    const rayAngle = angleRad + Math.PI / 2 + (ray * Math.PI) / 4;
+    const rayAngle = lightRad + Math.PI / 2 + (ray * Math.PI) / 4;
     const inner = 11;
     const outer = 15;
     ctx.beginPath();
@@ -370,7 +371,8 @@ function handlePointer(event) {
   const y = ((event.clientY - rect.top) / rect.height) * canvas.height;
   const centre = canvasCentre();
   const vector = Shadow.vectorToAngleDistance((x - centre.x) / SCALE, (y - centre.y) / SCALE, 2000);
-  el.angle.value = String(vector.angle);
+  // the handle is the light: dragging it to the upper right throws the shadow to the lower left
+  el.angle.value = String(Math.round(((vector.angle + 180) % 360) * 10) / 10);
   el.distance.value = String(vector.distance);
   scheduleDraw();
 }

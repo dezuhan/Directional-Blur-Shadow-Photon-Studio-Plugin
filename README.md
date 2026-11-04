@@ -131,6 +131,16 @@ from that. The shadow therefore lands directly behind the subject in either conv
 
 ## Changelog
 
+### 0.9.1
+
+- **Direction fixed.** Photon's drop-shadow `angle` is the *light* direction (Photoshop semantics),
+  so the shadow falls on the opposite side. The plugin now sends `angle + 180` to the effect, draws
+  the sun on the light side, and interprets a drag as "where the light comes from".
+- **Lighting > 100 % no longer flattens the shadow.** `opacity = min(1, raw × darkness)` clipped
+  every layer to fully opaque at 300 %, which turned the shadow into a directionless blob. The
+  curve is now `1 − (1 − raw)^darkness`: deeper, monotonic, never clipped.
+- Tests: 26.
+
 ### 0.9.0
 
 - Compact layout modelled on the Figma "Beautiful Shadows" panel: paper stage with a draggable

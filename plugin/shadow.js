@@ -89,6 +89,9 @@
       const rampT = params.steps === 1 ? 0 : (t - 1 / params.steps) / (1 - 1 / params.steps);
       const target = clamp(end + (start - end) * Math.pow(1 - rampT, 2), 0, 1);
       const raw = direct ? target : 1 - Math.pow(1 - target, 1 / params.steps);
+      // Darkness > 100 % must not clip every layer to 1 (that turned 300 % into a directionless
+      // blob): 1 - (1 - raw)^k stays strictly increasing and asymptotic to 1.
+      const shaded = darkness === 1 ? raw : 1 - Math.pow(1 - raw, darkness);
       layers.push({
         step,
         t,
@@ -96,7 +99,7 @@
         dy: ny * params.distance * easedDistance,
         blur: Math.max(0.1, params.blur * easedBlur),
         target,
-        opacity: Math.min(1, raw * darkness),
+        opacity: Math.min(1, shaded),
         perpScale: 1 + (params.taperEnd / 100 - 1) * t,
       });
     }
@@ -383,6 +386,9 @@
     };
 
     const angleRad = (params.angle * Math.PI) / 180;
+    // Photon's drop-shadow angle is the LIGHT direction (like Photoshop's "Use Global Light"):
+    // the shadow falls on the opposite side, so the effect receives angle + 180.
+    const lightAngle = (params.angle + 180) % 360;
     const angleName = find([/angle/, /direction/, /rotation/]);
     const distanceName = find([/distance/, /offset(?!x|y)/, /radius$/]);
     const xName = find([/^(x|posx|positionx|offsetx)$/]);
@@ -400,7 +406,7 @@
       setNumber(yName, Math.sin(angleRad) * distance);
     }
     setNumber(distanceName, distance);
-    setNumber(angleName, params.angle);
+    setNumber(angleName, lightAngle);
     setNumber(sizeName, blur);
     if (spreadName) out[spreadName] = 0;
     if (globalName) out[globalName] = false;

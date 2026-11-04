@@ -100,12 +100,15 @@ test("step count does not darken the composite (Beer-Lambert normalisation)", ()
   assert.ok(Math.abs(composite(30) - 0.5) < 1e-9, "30 layers compose to 0.5");
 });
 
-test("darkness scales after normalisation and clamps at 1", () => {
-  const base = Shadow.planLayers({ steps: 4, startOpacity: 50, endOpacity: 50, darkness: 100 }).layers[0].opacity;
-  const dark = Shadow.planLayers({ steps: 4, startOpacity: 50, endOpacity: 50, darkness: 200 }).layers[0].opacity;
-  const extreme = Shadow.planLayers({ steps: 4, startOpacity: 100, endOpacity: 100, darkness: 300 }).layers[0].opacity;
-  assert.ok(Math.abs(dark - Math.min(1, base * 2)) < 1e-9);
-  assert.equal(extreme, 1);
+test("darkness deepens without clipping the gradient", () => {
+  const at = (darkness) => Shadow.planLayers({ steps: 4, startOpacity: 50, endOpacity: 50, darkness }).layers[0].opacity;
+  const base = at(100);
+  const doubled = at(200);
+  const extreme = at(300);
+  // 1 - (1 - raw)^k: deeper, strictly increasing, always < 1
+  assert.ok(Math.abs(doubled - (1 - Math.pow(1 - base, 2))) < 1e-9);
+  assert.ok(doubled > base && extreme > doubled);
+  assert.ok(extreme < 1, "300 % does not clip to fully opaque");
 });
 
 test("angle: 0° points right, 90° points down", () => {
@@ -275,7 +278,7 @@ test("describeToMap reads array and object payloads", () => {
 
 test("effectParams maps onto the host's parameter names", () => {
   const out = Shadow.effectParams(DESCRIBED, { distance: 42, blur: 12, opacity: 0.4, dx: 0, dy: 0 }, { angle: 90, colour: "#112233" });
-  assert.equal(out.angle, 90);
+  assert.equal(out.angle, 270, "host angle is the light direction: shadow angle 90 becomes 270");
   assert.equal(out.distance, 42);
   assert.equal(out.size, 12);
   assert.equal(out.opacity, 0.4);
@@ -364,7 +367,7 @@ test("effectParams prefers an explicit blur parameter over size", () => {
   const out = Shadow.effectParams(described, { distance: 30, blur: 17, opacity: 0.5 }, { angle: 45, colour: "#000000" });
   assert.equal(out.blur, 17, "blur is used for softness");
   assert.equal(out.size, undefined, "size is not sent when an explicit blur exists");
-  assert.equal(out.angle, 45);
+  assert.equal(out.angle, 225, "light angle is the shadow angle + 180");
   assert.equal(out.opacity, 0.5);
 });
 
@@ -448,6 +451,22 @@ test("direct-mode opacities span startOpacity to endOpacity", () => {
   assert.equal(percent[0], 1, "farthest layer is endOpacity");
   assert.equal(percent[4], 44, "nearest layer is startOpacity");
   assert.deepEqual(percent, [1, 4, 12, 25, 44]);
+});
+
+
+test("positional hosts receive the shadow offset, not the light angle", () => {
+  const host = {
+    params: [
+      { name: "x", default: 2 },
+      { name: "y", default: 6 },
+      { name: "blur", default: 14 },
+      { name: "color", default: "000000" },
+      { name: "opacity", default: 44 },
+    ],
+  };
+  const out = Shadow.effectParams(host, { distance: 100, blur: 20, opacity: 0.4 }, { angle: 90, colour: "#000000" });
+  assert.ok(Math.abs(out.x) < 1e-9, "angle 90 points down, so x stays 0");
+  assert.ok(Math.abs(out.y - 100) < 1e-9, "y carries the whole offset");
 });
 
 (async () => {
