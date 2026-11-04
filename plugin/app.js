@@ -161,13 +161,16 @@ function drawPreview() {
   ctx.restore();
 
   if (isInner) {
+    // inner shadow: a soft edge band inside the card, offset against the light
     ctx.save();
     roundRect(ctx, centre.x - CARD.width / 2, centre.y - CARD.height / 2, CARD.width, CARD.height, 10);
     ctx.clip();
     for (const layer of plan.layers) {
       ctx.save();
       ctx.filter = "blur(" + Math.max(0.5, layer.blur * SCALE) + "px)";
-      ctx.fillStyle = "rgba(" + red + "," + green + "," + blue + "," + Math.min(1, layer.opacity).toFixed(3) + ")";
+      ctx.lineWidth = Math.max(1.5, layer.blur * SCALE * 1.2);
+      ctx.strokeStyle =
+        "rgba(" + red + "," + green + "," + blue + "," + Math.min(1, layer.opacity * 0.55).toFixed(3) + ")";
       roundRect(
         ctx,
         centre.x - CARD.width / 2 + layer.dx * SCALE,
@@ -176,7 +179,7 @@ function drawPreview() {
         CARD.height,
         10,
       );
-      ctx.fill();
+      ctx.stroke();
       ctx.restore();
     }
     ctx.restore();

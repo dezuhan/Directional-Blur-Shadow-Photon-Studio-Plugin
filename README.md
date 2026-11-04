@@ -7,6 +7,12 @@ Apply adds **five cascaded layer styles** to the selected layer in one `layer.ef
 the result is a single undo step, stays editable in Photon's Layer Style panel, and never duplicates
 the layer.
 
+## Screenshots
+
+| Drop shadow (default) | Colour picker | Inner shadow |
+| --- | --- | --- |
+| ![Drop shadow panel](docs/panel.png) | ![Colour picker](docs/picker.png) | ![Inner shadow mode](docs/inner.png) |
+
 ## Install
 
 1. Photon Studio → **Preferences → Plug-ins → Install plugin** → select this repository's
