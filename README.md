@@ -72,6 +72,11 @@ MIT licensed — see [LICENSE](LICENSE).
 
 ## Changelog
 
+### 0.14.4
+
+- The light handle now follows the Distance control all the way to 300 px (126 canvas px at the
+  preview scale) and stops only at the canvas edge instead of an early 74 px cap.
+
 ### 0.14.3
 
 - Removed the dashed guide line between the card and the light handle; the handle and sun rays

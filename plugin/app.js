@@ -191,9 +191,19 @@ function drawPreview() {
     ctx.restore();
   }
 
-  // light handle: the sun sits opposite the shadow
-  const reach = Math.min(74, Math.max(26, params.distance * SCALE));
+  // light handle: the sun sits opposite the shadow. Distance 300 px maps to 126 canvas px
+  // (SCALE 0.42); the old 74 px cap stopped the handle early, so let it travel until the sun
+  // (plus rays) reaches the canvas edge instead.
   const lightRad = ((params.angle + 180) * Math.PI) / 180;
+  const edgeMargin = 18;
+  const reachLimit = (() => {
+    const cos = Math.cos(lightRad);
+    const sin = Math.sin(lightRad);
+    const tx = cos > 0 ? (canvas.width - edgeMargin - centre.x) / cos : cos < 0 ? (edgeMargin - centre.x) / cos : Infinity;
+    const ty = sin > 0 ? (canvas.height - edgeMargin - centre.y) / sin : sin < 0 ? (edgeMargin - centre.y) / sin : Infinity;
+    return Math.max(0, Math.min(tx, ty));
+  })();
+  const reach = Math.min(Math.max(26, params.distance * SCALE), reachLimit);
   const hx = centre.x + Math.cos(lightRad) * reach;
   const hy = centre.y + Math.sin(lightRad) * reach;
 
