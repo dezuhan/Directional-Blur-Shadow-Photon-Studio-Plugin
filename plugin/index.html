@@ -47,20 +47,20 @@
         <details class="advanced">
           <summary>Advanced</summary>
           <div class="adv-stack">
-            <label class="mini">
+            <div class="mini">
               <span>Type</span>
               <span class="select">
-                <select id="kind">
+                <select id="kind" aria-label="Shadow type">
                   <option value="dropShadow" selected>Drop shadow</option>
                   <option value="innerShadow">Inner shadow</option>
                 </select>
                 <span class="chevron" aria-hidden="true"></span>
               </span>
-            </label>
-            <label class="mini">
+            </div>
+            <div class="mini">
               <span>Blend</span>
               <span class="select">
-                <select id="blend">
+                <select id="blend" aria-label="Shadow blend mode">
                     <option value="normal" selected>Normal</option>
                     <option value="dissolve">Dissolve</option>
                     <option value="darken">Darken</option>
@@ -91,7 +91,7 @@
                 </select>
                 <span class="chevron" aria-hidden="true"></span>
               </span>
-            </label>
+            </div>
           </div>
           <p class="hint adv-hint">
             Click the white card to change its colour. Blend mode previews live; Apply sends it when

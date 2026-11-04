@@ -74,6 +74,12 @@ MIT licensed — see [LICENSE](LICENSE).
 
 ## Changelog
 
+### 0.15.2
+
+- The Type and Blend rows are no longer `<label>` wrappers: a label around a nested `<select>`
+  let Photon open the native menu on top of the custom trigger. The native select is also pinned
+  hidden, and the popup keeps the 12 px floating radius.
+
 ### 0.15.1
 
 - Fixed the custom dropdown: the select wrapper no longer clips the popup, and the trigger/value
