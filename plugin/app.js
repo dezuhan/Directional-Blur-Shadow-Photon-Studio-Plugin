@@ -142,7 +142,8 @@ function setBusy(value) {
 
 /* ---------- direction preview ---------- */
 
-const CARD = { width: 112, height: 82 };
+const PREVIEW_CARD_FRACTION = 0.66;
+let previewAspect = 1.5; // selected layer width / height
 const SCALE = 0.42;
 
 // Canvas only has a subset of Photoshop's blend modes; the rest map to the nearest compositing op.
@@ -198,6 +199,25 @@ function canvasCentre() {
   return { x: el.previewCanvas.width / 2, y: el.previewCanvas.height / 2 };
 }
 
+function cardRect() {
+  const canvas = el.previewCanvas;
+  const centre = canvasCentre();
+  const maxWidth = canvas.width * PREVIEW_CARD_FRACTION;
+  const maxHeight = canvas.height * PREVIEW_CARD_FRACTION;
+  let width = maxWidth;
+  let height = width / previewAspect;
+  if (height > maxHeight) {
+    height = maxHeight;
+    width = height * previewAspect;
+  }
+  return {
+    x: centre.x - width / 2,
+    y: centre.y - height / 2,
+    width,
+    height,
+  };
+}
+
 function roundRect(ctx, x, y, width, height, radius) {
   const r = Math.min(radius, width / 2, height / 2);
   ctx.beginPath();
@@ -227,6 +247,7 @@ function drawPreview() {
   const plan = Shadow.planLayers(params);
   const isInner = plan.params.kind === "innerShadow";
   const centre = canvasCentre();
+  const card = cardRect();
   const hex = params.colour.replace("#", "");
   const red = parseInt(hex.slice(0, 2), 16);
   const green = parseInt(hex.slice(2, 4), 16);
@@ -249,10 +270,10 @@ function drawPreview() {
     ctx.fillStyle = "rgba(" + red + "," + green + "," + blue + "," + Math.min(1, layer.opacity).toFixed(3) + ")";
     roundRect(
       ctx,
-      centre.x - CARD.width / 2 + layer.dx * SCALE,
-      centre.y - CARD.height / 2 + layer.dy * SCALE,
-      CARD.width,
-      CARD.height,
+      card.x + layer.dx * SCALE,
+      card.y + layer.dy * SCALE,
+      card.width,
+      card.height,
       10,
     );
       ctx.fill();
@@ -262,7 +283,7 @@ function drawPreview() {
 
   ctx.save();
   ctx.fillStyle = objectColour;
-  roundRect(ctx, centre.x - CARD.width / 2, centre.y - CARD.height / 2, CARD.width, CARD.height, 10);
+  roundRect(ctx, card.x, card.y, card.width, card.height, 10);
   ctx.fill();
   const cardRgb = Colour.hexToRgb(objectColour);
   const cardLuma = (cardRgb.r * 299 + cardRgb.g * 587 + cardRgb.b * 114) / 1000;
@@ -274,7 +295,7 @@ function drawPreview() {
   if (isInner) {
     // inner shadow: a soft edge band inside the card, offset against the light
     ctx.save();
-    roundRect(ctx, centre.x - CARD.width / 2, centre.y - CARD.height / 2, CARD.width, CARD.height, 10);
+    roundRect(ctx, card.x, card.y, card.width, card.height, 10);
     ctx.clip();
     for (const layer of plan.layers) {
       ctx.save();
@@ -285,10 +306,10 @@ function drawPreview() {
         "rgba(" + red + "," + green + "," + blue + "," + Math.min(1, layer.opacity * 0.55).toFixed(3) + ")";
       roundRect(
         ctx,
-        centre.x - CARD.width / 2 + layer.dx * SCALE,
-        centre.y - CARD.height / 2 + layer.dy * SCALE,
-        CARD.width,
-        CARD.height,
+        card.x + layer.dx * SCALE,
+        card.y + layer.dy * SCALE,
+        card.width,
+        card.height,
         10,
       );
       ctx.stroke();
@@ -348,11 +369,34 @@ function canvasPoint(event) {
 }
 
 function insideCard(point) {
-  const centre = canvasCentre();
+  const card = cardRect();
   return (
-    Math.abs(point.x - centre.x) <= CARD.width / 2 &&
-    Math.abs(point.y - centre.y) <= CARD.height / 2
+    point.x >= card.x &&
+    point.x <= card.x + card.width &&
+    point.y >= card.y &&
+    point.y <= card.y + card.height
   );
+}
+
+async function refreshSelection() {
+  if (!api) return;
+  try {
+    const doc = await api.documents.active();
+    if (!doc) {
+      previewAspect = 1.5;
+      scheduleDraw();
+      return;
+    }
+    const ids = doc.selectedLayerIds || [];
+    const layer = (doc.layers || []).find((item) => item.id === ids[ids.length - 1]);
+    const size = (layer && (layer.bounds || layer.size || layer)) || doc;
+    const width = Number(size.width || size.w || 0);
+    const height = Number(size.height || size.h || 0);
+    previewAspect = width > 0 && height > 0 ? Math.min(4, Math.max(0.25, width / height)) : 1.5;
+    scheduleDraw();
+  } catch {
+    /* document closed; keep the last aspect */
+  }
 }
 
 function handlePointer(event) {
@@ -635,7 +679,9 @@ async function init() {
   setColour(el.colour.value, { quiet: true });
   badge("Ready", "ok");
   setStatus("drag the light, then Preview");
-  addDetail("panel ready · v0.17.1");
+  addDetail("panel ready · v0.18.0");
+  await refreshSelection();
+  setInterval(refreshSelection, 2000);
   drawPreview();
   markPreview();
 }

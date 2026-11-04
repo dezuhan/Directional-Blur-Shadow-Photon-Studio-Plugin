@@ -75,6 +75,11 @@ MIT licensed — see [LICENSE](LICENSE).
 
 ## Changelog
 
+### 0.18.0
+
+- The preview card follows the **selected layer's aspect ratio** instead of a fixed 4:3 shape.
+  It refreshes when the selection changes, so the shadow preview matches the object being edited.
+
 ### 0.17.2
 
 - The sun handle can be dragged even when it sits on top of the white preview box; the box
