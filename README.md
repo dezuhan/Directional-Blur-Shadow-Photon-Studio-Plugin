@@ -1,43 +1,37 @@
 # Directional Shadow — Photon Studio plugin
 
-Port of the **Directional Blur Shadow** macro for Affinity Photo (original concept by
-`rbonelli`, v1.2.0) to Photon Studio's plugin API. It builds a shadow that moves away from the
-selected layer in a chosen direction, blurring, fading and optionally tapering as it goes.
+Port of the **Directional Blur Shadow** macro for Affinity Photo (original concept by `rbonelli`,
+v1.2.0), rebuilt for Photon Studio's operation API and modelled on the Figma plugin
+**Beautiful Shadows**.
 
-- MIT licensed, free and open source.
-- **Preview first**: build the whole shadow, look at it, discard it if you do not like it.
-- Everything runs through Photon's own operations — no service, no network, no extra binary.
+- Adds **five cascaded drop shadows** to the **selected layer** — no duplicate layer.
+- One `layer.effects.set` call, so the result is a single undo step and stays editable in Photon's
+  Layer Style panel.
+- The layer's existing styles are merged, never replaced.
+- **Preview** can be undone: the styles are snapshotted first and `Remove preview` writes them back.
+- MIT licensed, no service, no network, no extra binaries.
 
-## Compact panel
+## Panel
 
-The panel mirrors the Beautiful Shadows layout with Tenzen-native tokens:
+A paper stage with a draggable **light handle** (sun with rays) and a floating **Drop Shadow** sheet:
 
-- a tall paper stage where the subject sits high and the **light handle** (sun with rays) floats
-  around it — drag it to set angle and distance, with a live `angle° · distance px` readout;
-- a floating **Drop Shadow** sheet over the bottom of the stage with four inline fields:
-  `A °` (angle), `D px` (distance), `Light %` (darkness), `Soft px` (blur);
-- a bottom bar with the round colour swatch, **Preview** and **Apply**; everything else
-  (mode, layers, start/end opacity, taper, rasterize, diagnostics) lives under **Advanced**.
+| Field | Range | Default | Meaning |
+| --- | --- | --- | --- |
+| `A °` | 0–360 | 30 | Shadow direction: 0° right, 90° down |
+| `D px` | 1–2000 | 150 | How far the shadow travels |
+| `Light %` | 1–100 | 100 | Scales every layer's opacity (Figma's Brightness) |
+| `Soft px` | 1–300 | 26 | Blur at the far end |
+
+Drag the sun to aim: the shadow falls on the **opposite** side, and an `angle° · distance px` chip
+follows the pointer. The bottom bar holds the colour swatch, **Preview** and **Apply**.
 
 Nothing is written to the document until Preview or Apply is pressed.
 
-## Controls
+## Five fixed steps
 
-| Control | Range | Default | Meaning |
-| --- | --- | --- | --- |
-| Angle (°) | 0–360 | 30 | 0° = right, 90° = down (clockwise on screen) |
-| Distance (px) | 1–2000 | 150 | How far the shadow travels from the layer |
-| Softness (px) | 1–300 | 26 | Blur at the far end of the shadow |
-| Lighting (%) | 1–100 | 100 | Scales every layer's opacity, like Brightness in Figma |
-| Colour | hex | #000000 | Silhouette colour |
-| Taper (narrow/expand) | on/off | off | Copies mode only |
-| Size at tip (%) | 1–500 | 90 | Copies mode only |
-| Rasterize into one layer | on/off | on | Copies mode only |
+The step count is fixed at 5 and the ramp is the Beautiful Shadows preset (farthest → nearest):
 
-**The step count is fixed at 5**, matching the Beautiful Shadows plugin, and the opacity follows the
-same preset:
-
-| Step | Offset | Blur | Opacity at lighting 100 % |
+| Step | Offset | Blur | Opacity at Light 100 % |
 | --- | --- | --- | --- |
 | 1 (far) | distance × 1.00 | softness × 1.00 | 2 % |
 | 2 | distance × 0.64 | softness × 0.91 | 15 % |
@@ -45,238 +39,80 @@ same preset:
 | 4 | distance × 0.16 | softness × 0.57 | 85 % |
 | 5 (near) | distance × 0.04 | softness × 0.30 | 98 % |
 
-Opacity is simply `lighting × preset`, so at 45 % the five layers become 1 / 7 / 23 / 38 / 44 % —
-exactly the values the Figma plugin shows.
+Opacity is `Light × preset`, so Light 45 % gives 1 / 7 / 23 / 38 / 44 % — the same column the Figma
+plugin shows at Brightness 45 %.
 
-## Two build modes
+## How it talks to Photon
 
-| Mode | What it builds | Pros | Cons |
-| --- | --- | --- | --- |
-| **Layer styles** (default) | **N `dropShadow` layer styles added to the selected layer** (one `layer.effects.set` call, existing styles preserved) | Stays editable in Photon's **Layer Style** panel, one extra layer only, effects scale with the layer | Taper is not expressible as an effect |
-| **Layer copies** | N duplicated layers, each filled, blurred and faded | Full control incl. **taper** | More layers; rasterize on Apply to flatten |
+```
+documents.active()                        → read the selected layer and its current styles
+effect.describe({kind:"dropShadow"})      → learn the real parameter names and units
+layer.effects.set({layerIds, styles})     → write the merged styles (existing effects + 5 new)
+```
 
-`layer.effect.set` documents `index` as "defaults to zero and may equal the current count to
-append", so several drop shadows of the same kind can coexist on one layer — that is what makes
-the effects mode possible. The plugin reads the real parameter names from
-`effect.describe({kind:"dropShadow"})` at runtime and falls back to canonical names when the host
-does not answer.
+Three details that took measurement rather than guessing:
 
-## How it maps to Photon operations
-
-| Affinity (JSX) | Photon plugin operation |
-| --- | --- |
-| `createTransform(..., {duplicateNodes:true})` | `layer.duplicate` |
-| `ColourOverlayLayerEffect` | `pixels.fill` with `preserveTransparency: true` |
-| `GaussianBlurLayerEffect` | `filter.blur.gaussianBlur` (`params.radius`) |
-| `createSetOpacity` | `layer.update` (`properties.opacity`) |
-| `createTransform` translate | `layer.translate` |
-| taper (rotate → scale → rotate) | `core.canvas.applyLayerTransform` (6-value affine matrix) |
-| `AddChildNodesCommandBuilder` container | `layer.group` + `layer.update` (rename) |
-| `createRasteriseObjects` | `layer.rasterize` (`target: "layer"`) |
-| "place behind the object" | `layer.move` with the index computed from the detected stack order |
-
-The opacity curve is the same one the Affinity version converged on: each layer gets
-`raw = 1 − (1 − target)^(1 / steps)` and the overall darkness is applied **after** that
-normalisation, so adding layers only smooths the gradient and never darkens it.
+1. **Parameter names are discovered, not assumed.** Only names listed by `effect.describe` are sent;
+   units follow the host's own defaults (opacity default `75` means percent, `0.75` means a fraction).
+   Positional hosts (`x`/`y`, like the Figma plugin) are supported too.
+2. **Angle is the light direction on a Photoshop dial** (0° right, 90° up), so a shadow pointing at
+   θ is written as `180 − θ`. `effectAngle` is unit-tested for 0/90/180/270 and 32.1 → 147.9.
+3. **Colour encoding is verified.** `layer.effects.set` does not document its colour shape, so the
+   write is read back: if the colour did not stick, the plugin retries with the next encoding
+   (`{space:"rgb"}` object → bare `RRGGBB` → `#RRGGBB`) and stops at the first one the host keeps.
+   When the document model does not expose styles, the RGB object (the same shape `pixels.fill`
+   accepts) is kept.
 
 ## Using it
 
-1. Select one layer (raster, text, shape — anything Photon can duplicate).
-2. Open **Plugins → Directional Blur Shadow…** (or `Ctrl+Shift+D`).
-3. Tune the controls, press **Preview**.
-4. Press **Apply** to keep it, or **Remove preview** to throw it away.
-5. The result is a group named `Directional Blur Shadow` placed directly behind the source
-   layer; with *Rasterize* on, Apply flattens the group into a single layer.
+1. Select one layer (raster, text, shape — anything with a silhouette).
+2. Open **Plugins → Directional Blur Shadow…** (`Ctrl+Shift+D`).
+3. Drag the sun or type values, press **Preview**.
+4. **Apply** keeps the result; **Remove preview** restores the styles from before the preview.
+5. The last values are remembered in the plugin's settings.
 
-The last used values are remembered in the plugin's settings.
+## Limits
 
-## Layout detection
-
-Photon does not document whether the layer list is stored top-first or bottom-first, so the
-plugin duplicates the source once, reads the resulting indices, and derives the insertion index
-from that. The shadow therefore lands directly behind the subject in either convention.
-
-## Limits / notes
-
-- Text and shape layers are duplicated as-is; Photon keeps them editable. Rasterize on Apply if
-  you want a single raster layer.
-- Taper uses an affine transform, so a very large taper on a non-square layer resamples once more
-  than the other steps do.
-- The preview lives in the document until you Apply or Remove it. Closing the panel with a
-  preview on screen leaves it behind — press **Remove preview** first.
-
-## Changelog
-
-### 0.11.0
-
-- **Five steps, fixed.** The Layers field is gone; the plugin always builds the Beautiful Shadows
-  preset (offset × [1, .64, .36, .16, .04], blur × [1, .91, .76, .57, .3]).
-- **Opacity follows the Figma formula:** `lighting × [2, 15, 50, 85, 98] %`, so lighting 45 % gives
-  the 1 / 7 / 23 / 38 / 44 % column the Figma plugin shows.
-- **Lighting is capped at 100 %** (was 10–300 %). Start/end opacity fields removed — they no longer
-  have a meaning with the preset.
-- Tests: 22.
-
-### 0.10.2
-
-- **Colour parameter found.** A descriptor without a `default` (colour parameters often have none)
-  was skipped by the parser, so `color` was never sent and the host kept its black default. Such
-  entries are now recognised, and a colour with no default is written as bare hex (`FF0000`), which
-  is how Photon's dial shows it.
-- **Advanced → Shadow colour format** forces `auto`, `#RRGGBB`, bare `RRGGBB` or an
-  `{space:"rgb",…}` object, so the right notation can be picked without another build.
-- **Inspect** now prints the stored layer styles *and* the last payload that was sent.
-- Tests: 24.
-
-### 0.10.1
-
-- **Angle convention corrected.** Photon's dial is Photoshop's: the angle is the *light* direction,
-  counter-clockwise with 0° at the right and 90° pointing **up**. In screen coordinates a shadow
-  pointing at θ therefore needs `light = 180° − θ` (the previous `θ + 180` was a horizontal mirror,
-  which is why the shadow kept landing on the wrong side).
-- **Advanced → Angle convention** offers an escape hatch (`Shadow offset`, y-down) for hosts that
-  read the angle as the shadow direction itself.
-- Tests: 22.
-
-### 0.10.0
-
-- **Effects now go on the selected layer — no duplicate.** The shadow is written with one
-  `layer.effects.set` call that merges the layer's existing styles with the new `dropShadows`, so
-  your own effects survive and the whole change is a single undo step.
-- **Preview is revertible.** The plugin snapshots the layer styles before writing; **Remove preview**
-  writes the snapshot back (or clears the styles when the layer had none).
-- **Colour fixed.** The colour is now written into the `dropShadows` payload using the host's own
-  notation (bare `000000` when the default has no `#`, `#000000` when it does) instead of the strict
-  `layer.effect.set` path that silently kept the default black.
-- Mode copy and hints updated; copies mode still duplicates layers for taper.
-- Tests: 21.
-
-### 0.9.1
-
-- **Direction fixed.** Photon's drop-shadow `angle` is the *light* direction (Photoshop semantics),
-  so the shadow falls on the opposite side. The plugin now sends `angle + 180` to the effect, draws
-  the sun on the light side, and interprets a drag as "where the light comes from".
-- **Lighting > 100 % no longer flattens the shadow.** `opacity = min(1, raw × darkness)` clipped
-  every layer to fully opaque at 300 %, which turned the shadow into a directionless blob. The
-  curve is now `1 − (1 − raw)^darkness`: deeper, monotonic, never clipped.
-- Tests: 26.
-
-### 0.9.0
-
-- Compact layout modelled on the Figma "Beautiful Shadows" panel: paper stage with a draggable
-  sun-shaped light handle and a floating Drop Shadow sheet (`A °`, `D px`, `Light %`, `Soft px`).
-- Bottom bar reduced to colour swatch + Preview + Apply; mode, layers, opacity ramp, taper,
-  rasterize and diagnostics moved into **Advanced**.
-- Live `angle° · distance px` chip appears on the canvas while dragging.
-- Panel minimum size lowered to 340 × 460.
-
-### 0.8.1
-
-- The panel now shows the real build time in its footer (`NNN ms · N item(s)`), so the numbers in
-  the app can be compared with `tools/bench.cjs`.
-
-### 0.8.0
-
-- Opacity ramp is normalised so the nearest layer lands exactly on Start opacity and the farthest
-  on End opacity. Before, `(1 − t)²` never reached "start": 44 % was sent as 29 %.
-- Canvas redraws are coalesced into one animation frame, so dragging the handle no longer triggers
-  a redraw per `pointermove` event.
-- `tools/bench.cjs` added — prints µs per ramp/taper call, operation counts per action and the
-  simulated round-trip cost, so performance discussions use measurements instead of guesses.
-
-### 0.7.1
-
-- Default opacities now match Beautiful Shadows (**44 % near → 1 % far**) instead of 100 % → 5 %.
-  A 100 % start made the closest drop shadow almost solid, which looked like "some shadows are at
-  100 %".
-- The preview layer's **inherited layer styles are cleared** before the new drop shadows are
-  appended (`layer.effects.clear`). A duplicate copies the source layer's effects, so old shadows
-  at their own opacity piled up under the new ones.
-- Tests: 24 (now asserting that clearing happens before the appends).
-
-### 0.7.0
-
-- `effect.describe` is now read **recursively**: descriptor arrays, nested wrappers
-  (`{descriptor: {parameters: [...]}}`, `{params: {...}}`) and flat name → value maps all work, so
-  the real parameter names are found regardless of the payload shape.
-- **Positional hosts** are supported: if the effect exposes `x`/`y` (like the Figma plugin's
-  Position fields) instead of `distance`+`angle`, the plugin projects the direction into those two
-  values directly.
-- Parameter matching is broader: `angle|direction|rotation`, `distance|offset`, `blur|radius|
-  softness|size`, `opacity|alpha|transparency`, `color|tint`, `blend|mode`.
-- When mapping still finds nothing, the error now lists the discovered parameter names, so a single
-  screenshot of the message is enough to fix the mapping.
-- Tests: 24.
-
-### 0.6.0
-
-- Drop-shadow payloads are now built **strictly from `effect.describe`**: only parameter names the
-  host lists are sent, units are inferred from the host's own defaults (opacity default 75 means
-  percent, 0.75 means a fraction; a string colour default means hex, an object means rgb), and
-  `spread` / `useGlobalLight` are only included when they exist.
-- When `effect.describe` returns nothing the plugin **refuses to guess**: it stops with a clear
-  message instead of sending an invalid payload (which is what produced "Invalid dropShadow
-  parameters").
-- A rejected payload is shown in Diagnostics together with the exact object Photon refused, so the
-  mapping can be corrected from evidence.
-- Tests: 21.
-
-### 0.5.0
-
-- Fixed the created drop shadows keeping their defaults (Opacity 75 / Angle 120 / Distance 5 /
-  Size 5): the effect payload now starts from the host's own typed defaults returned by
-  `effect.describe` and overrides the mapped keys, so the payload is always complete.
-- After appending the N shadows the plugin **patches every index again** with the same values —
-  some hosts create the style with defaults on append and only apply `params` on a patch.
-- **Diagnostics → Inspect effect parameters** now also dumps the selected layer's effects, so the
-  real parameter names and resulting values can be compared in one place.
-- Tests: 20, now asserting the append+patch pairs and that typed defaults stay in the payload.
-
-### 0.4.0
-
-- Defaults now match Beautiful Shadows: **5 layers**, distance 150 px, softness 26 px,
-  start/end opacity 100/5 %, lighting strength 100 %.
-- Eased ramps: offset `t²`, blur `t^0.7`, opacity `(1 − t)²` — the stacked shadows now read as one
-  soft gradient instead of separate copies.
-- The canvas preview no longer rebuilds the document while dragging; the document changes only on
-  **Preview** or **Apply**.
-- UI simplified: Lighting strength replaces "Overall darkness", Softness replaces "Max blur", and
-  the opacity/taper/rasterize options live under **Advanced**.
-- Tests grew to 20 (5-layer default, ramp offsets/blur, direct vs composite opacity).
-
-### 0.3.0
-
-- **Interactive direction preview**: a canvas in the panel paints the soft stack (real blur and
-  per-step opacity), with a draggable handle that sets angle and distance.
-- **Live update** rebuilds the document preview while dragging (debounced), so the shadow follows
-  the handle in Photon.
-- Softness fix: the effect mapping now prefers an explicit `blur`/`radius` parameter over `size`,
-  which is what made the first builds look like hard stacked copies.
-- **Diagnostics → Inspect effect parameters** prints the host's real `dropShadow` parameter names
-  and values, so the mapping can be checked on any Photon version.
-- Tests grew to 18 (drag vector maths, blur-over-size priority).
-
-### 0.2.0
-
-- New **Layer styles** mode: the shadow is built from N `dropShadow` layer effects stacked on one
-  hidden-copy layer (`fillOpacity: 0`), instead of N duplicated layers. Result stays editable in
-  Photon's Layer Style panel and keeps the layer stack clean.
-- Effect parameter names are discovered at runtime with `effect.describe`, with a canonical
-  fallback, so the plugin still works if the host does not answer.
-- Mode selector in the panel; taper and rasterize are only offered in **Layer copies** mode
-  (taper cannot be expressed as a drop shadow effect).
-- Tests grew to 16 (describe parsing, parameter mapping, effects pipeline order and indices).
+- There is no "remove one effect" operation in the API, so `Remove preview` restores the whole
+  styles snapshot rather than deleting individual effects.
+- Preview writes to the layer immediately; that is the trade-off for not duplicating it.
+- Shadows are layer styles, so a very large `Soft` value is limited by the host's blur range.
 
 ## Testing
 
 ```powershell
-node tools/shadow-test.cjs     # 11 tests: opacity law, angle maths, taper matrix, pipeline
+node tools/shadow-test.cjs     # 18 tests
+node tools/bench.cjs           # pure-maths µs and operation counts
 ```
 
-The pipeline test runs against a fake Photon SDK (`tools/shadow-test.cjs`) and asserts the exact
-operation sequence, the placement indices and the rasterize step.
+The suite covers the preset maths (including the Figma opacity column at 100/45 %), the angle
+conversion, parameter mapping for angular and positional hosts, the colour-encoding retry loop, the
+styles snapshot/restore, and the single-write pipeline. A Preview sends **4 operations** in total
+(`documents.active` ×2, `effect.describe`, `layer.effects.set`).
+
+## Changelog
+
+### 0.12.0
+
+- **Advanced section removed.** No mode switch, no angle-convention switch, no colour-format switch,
+  no taper/rasterize fields — the panel is the stage, the Drop Shadow sheet and three actions.
+- The copies mode is gone with it: the plugin always writes drop-shadow layer styles to the selected
+  layer, which is what the panel promised.
+- Colour is now sent as an `{space:"rgb"}` object first and **verified by reading the styles back**,
+  falling back to bare hex and `#hex` only when the host did not keep it.
+- Preview is down to **4 operations**.
+- Tests: 18.
+
+### 0.11.0
+
+- Five steps fixed (Layers field removed), presets for offset/blur/opacity, Lighting capped at 100 %.
+
+### 0.10.x
+
+- Effects applied to the selected layer through `layer.effects.set` (no duplicate), styles snapshot
+  for undo, Photoshop light-angle conversion (`180 − θ`), colour-parameter discovery.
 
 ## License
 
 MIT — see [LICENSE](LICENSE). The original Affinity macro concept is by `rbonelli`; this is an
-independent reimplementation for Photon Studio's operation-based plugin API.
+independent reimplementation for Photon Studio.

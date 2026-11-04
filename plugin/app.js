@@ -1,9 +1,9 @@
 "use strict";
 
 /*
- * Directional Shadow panel — UI layer.
- * The pipeline lives in shadow.js (pure math + injected Photon SDK), so this file only reads
- * the controls, keeps the preview state and talks to the document.
+ * Directional Shadow panel.
+ * The pipeline lives in shadow.js; this file reads the controls, draws the direction preview and
+ * talks to the document. Nothing is written until Preview or Apply is pressed.
  */
 
 const SDK = globalThis.__photonSdk;
@@ -11,18 +11,11 @@ const Shadow = globalThis.PhotonShadow;
 
 const el = {
   badge: document.getElementById("badge"),
-  mode: document.getElementById("mode"),
-  angleMode: document.getElementById("angleMode"),
-  colourFormat: document.getElementById("colourFormat"),
-  modeHint: document.getElementById("modeHint"),
   angle: document.getElementById("angle"),
   distance: document.getElementById("distance"),
   blur: document.getElementById("blur"),
-  colour: document.getElementById("colour"),
   darkness: document.getElementById("darkness"),
-  taper: document.getElementById("taper"),
-  taperEnd: document.getElementById("taperEnd"),
-  rasterize: document.getElementById("rasterize"),
+  colour: document.getElementById("colour"),
   preview: document.getElementById("preview"),
   apply: document.getElementById("apply"),
   removePreview: document.getElementById("removePreview"),
@@ -30,16 +23,14 @@ const el = {
   status: document.getElementById("status"),
   meta: document.getElementById("meta"),
   previewCanvas: document.getElementById("previewCanvas"),
-  inspect: document.getElementById("inspect"),
-  debugLog: document.getElementById("debugLog"),
 };
 
 let api = null;
-let preview = null; // { layerIds, groupId, mode, effects } of the current preview
+let preview = null; // { layerIds, effects, colourFormat, stylesBefore }
 let busy = false;
-let lastParams = { ...Shadow.DEFAULTS };
 let dragging = false;
-let lastPayload = null;
+let drawFrame = null;
+let lastParams = { ...Shadow.DEFAULTS };
 
 function badge(text, kind) {
   el.badge.textContent = text;
@@ -54,10 +45,6 @@ function errText(error) {
   return String((error && error.message) || error || "unknown error");
 }
 
-function readMode() {
-  return el.mode.value === "copies" ? "copies" : "effects";
-}
-
 function readParams() {
   return Shadow.normalise({
     angle: el.angle.value,
@@ -65,9 +52,6 @@ function readParams() {
     blur: el.blur.value,
     colour: el.colour.value,
     darkness: el.darkness.value,
-    taper: el.taper.checked,
-    taperEnd: el.taperEnd.value,
-    rasterize: el.rasterize.checked,
   });
 }
 
@@ -75,169 +59,23 @@ function applyParamsToUi(params) {
   el.angle.value = String(params.angle);
   el.distance.value = String(params.distance);
   el.blur.value = String(params.blur);
-  el.colour.value = params.colour;
   el.darkness.value = String(params.darkness);
-  el.taper.checked = Boolean(params.taper);
-  el.taperEnd.value = String(params.taperEnd);
-  el.taperEnd.disabled = !params.taper;
-  el.rasterize.checked = Boolean(params.rasterize);
+  el.colour.value = params.colour;
 }
 
 function setBusy(value) {
   busy = value;
-  for (const button of [el.preview, el.apply]) button.disabled = value;
+  el.preview.disabled = value;
+  el.apply.disabled = value;
   el.removePreview.disabled = value;
 }
 
-async function buildFor(doc, layerId, params, mode) {
-  if (mode === "effects") {
-    // applies to the SELECTED layer, no duplicate; the styles snapshot makes it revertible
-    return Shadow.applyLayerStyles(api, {
-      documentId: doc.id,
-      layerId,
-      params,
-      angleMode: el.angleMode ? el.angleMode.value : "light-yup",
-      colourFormat: el.colourFormat ? el.colourFormat.value : "auto",
-      onStep: (done, total) => setStatus("shadow " + done + " / " + total),
-    });
-  }
-  return Shadow.buildShadow(api, {
-    documentId: doc.id,
-    sourceLayerId: layerId,
-    params: { ...params, rasterize: false },
-    onStep: (done, total) => setStatus("layer " + done + " / " + total),
-  });
-}
-
-async function selectedLayer() {
-  const doc = await api.documents.active();
-  if (!doc) throw new Error("No active document. Open an image in Photon first.");
-  const ids = doc.selectedLayerIds || [];
-  const layerId = ids[ids.length - 1];
-  if (!layerId) throw new Error("Select one layer in the Layers panel first.");
-  return { doc, layerId };
-}
-
-async function markPreview() {
-  el.removePreview.hidden = !preview;
-  el.meta.textContent = preview ? (preview.layerIds || []).length + " layer(s) in preview" : "";
-}
-
-async function dropPreview() {
-  if (!preview) return;
-  const current = preview;
-  try {
-    const doc = await api.documents.active();
-    if (doc) {
-      if (current.mode === "effects") {
-        await Shadow.restoreLayerStyles(api, doc.id, current.layerIds[0], current.stylesBefore);
-      } else {
-        await Shadow.removeShadow(api, doc.id, current.layerIds, current.groupId);
-      }
-    }
-  } catch {
-    /* document closed; nothing to clean */
-  }
-  preview = null;
-  await markPreview();
-}
-
-async function runPreview() {
-  if (busy) return;
-  setBusy(true);
-  badge("Working…", "busy");
-  try {
-    lastParams = readParams();
-    await dropPreview();
-    const { doc, layerId } = await selectedLayer();
-    const mode = readMode();
-    setStatus(mode === "effects" ? "adding " + Shadow.STEPS + " drop shadows…" : "building " + Shadow.STEPS + " layers…");
-    const startedAt = performance.now();
-    preview = await buildFor(doc, layerId, lastParams, mode);
-    lastPayload = (preview && preview.payloads) || null;
-    const elapsed = Math.round(performance.now() - startedAt);
-    preview.mode = mode;
-    drawPreview();
-    el.meta.textContent = elapsed + " ms · " + (preview.effects || preview.layerIds.length) + " item(s)";
-    badge("Preview", "busy");
-    setStatus(
-      mode === "effects"
-        ? "preview ready — " + preview.effects + " drop shadows on the selected layer"
-        : "preview ready — Apply to keep it",
-    );
-    await markPreview();
-  } catch (error) {
-    badge("Failed", "danger");
-    setStatus(errText(error));
-    if (error && (error.code === "EFFECT_REJECTED" || error.code === "EFFECT_DESCRIBE_MISSING")) {
-      el.debugLog.textContent =
-        errText(error) + "\n\npayload rejected by Photon:\n" + JSON.stringify(error.payload || null, null, 1);
-      el.hint.textContent = "Photon rejected the dropShadow payload — open Diagnostics and send the log.";
-    }
-  } finally {
-    setBusy(false);
-  }
-}
-
-async function runApply() {
-  if (busy) return;
-  setBusy(true);
-  badge("Working…", "busy");
-  try {
-    lastParams = readParams();
-    const { doc, layerId } = await selectedLayer();
-
-    const mode = readMode();
-    if (!preview) {
-      setStatus(mode === "effects" ? "adding " + Shadow.STEPS + " drop shadows…" : "building " + Shadow.STEPS + " layers…");
-      preview = await buildFor(doc, layerId, lastParams, mode);
-      preview.mode = mode;
-    }
-
-    const applyStart = performance.now();
-    if (mode === "copies" && lastParams.rasterize && preview.groupId) {
-      setStatus("rasterizing…");
-      await api.documents.execute(
-        "layer.rasterize",
-        { layerIds: [preview.groupId], target: "layer" },
-        doc.id,
-      );
-    }
-    await api.settings.set({ shadow: lastParams }).catch(() => {});
-    badge("Applied", "ok");
-    setStatus("shadow placed behind the selected layer");
-    el.meta.textContent = Math.round(performance.now() - applyStart) + " ms apply";
-    const kept = preview;
-    preview = null; // applied, nothing left to "remove"
-    await markPreview();
-    if (!kept.groupId) setStatus("applied");
-  } catch (error) {
-    badge("Failed", "danger");
-    setStatus(errText(error));
-  } finally {
-    setBusy(false);
-  }
-}
-
-async function runRemovePreview() {
-  if (busy) return;
-  setBusy(true);
-  try {
-    await dropPreview();
-    badge("Ready", "ok");
-    setStatus("preview removed");
-  } finally {
-    setBusy(false);
-  }
-}
-
-/* ---------- direction preview (canvas) ---------- */
+/* ---------- direction preview ---------- */
 
 const CARD = { width: 112, height: 82 };
 const SCALE = 0.42;
 
 function canvasCentre() {
-  // the card sits above the value sheet, which floats at the bottom of the stage
   return { x: el.previewCanvas.width / 2, y: el.previewCanvas.height / 2 - 30 };
 }
 
@@ -252,9 +90,6 @@ function roundRect(ctx, x, y, width, height, radius) {
   ctx.closePath();
 }
 
-let drawFrame = null;
-
-/** Coalesce redraws into one animation frame (a drag fires many pointermove events). */
 function scheduleDraw() {
   if (drawFrame !== null) return;
   const raf =
@@ -272,8 +107,12 @@ function drawPreview() {
   const params = readParams();
   const plan = Shadow.planLayers(params);
   const centre = canvasCentre();
+  const hex = params.colour.replace("#", "");
+  const red = parseInt(hex.slice(0, 2), 16);
+  const green = parseInt(hex.slice(2, 4), 16);
+  const blue = parseInt(hex.slice(4, 6), 16);
 
-  // Light "paper" so a dark shadow is actually visible (the panel ground is near-black).
+  // light "paper" so a dark shadow is visible on the near-black panel
   ctx.save();
   ctx.fillStyle = "#eae7e1";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -282,16 +121,10 @@ function drawPreview() {
   ctx.strokeRect(0.5, 0.5, canvas.width - 1, canvas.height - 1);
   ctx.restore();
 
-  // shadow layers: far → near, each one blurred and semi transparent
   for (const layer of plan.layers) {
-    const alpha = Math.min(1, layer.opacity);
-    const hex = params.colour.replace("#", "");
-    const r = parseInt(hex.slice(0, 2), 16);
-    const g = parseInt(hex.slice(2, 4), 16);
-    const b = parseInt(hex.slice(4, 6), 16);
     ctx.save();
     ctx.filter = "blur(" + Math.max(0.5, layer.blur * SCALE) + "px)";
-    ctx.fillStyle = "rgba(" + r + "," + g + "," + b + "," + alpha.toFixed(3) + ")";
+    ctx.fillStyle = "rgba(" + red + "," + green + "," + blue + "," + Math.min(1, layer.opacity).toFixed(3) + ")";
     roundRect(
       ctx,
       centre.x - CARD.width / 2 + layer.dx * SCALE,
@@ -304,7 +137,6 @@ function drawPreview() {
     ctx.restore();
   }
 
-  // the object itself
   ctx.save();
   ctx.fillStyle = "#f7f7f7";
   roundRect(ctx, centre.x - CARD.width / 2, centre.y - CARD.height / 2, CARD.width, CARD.height, 10);
@@ -314,9 +146,8 @@ function drawPreview() {
   ctx.stroke();
   ctx.restore();
 
-  // light handle: a small sun whose rays point away from the card
+  // light handle: the sun sits opposite the shadow
   const reach = Math.min(74, Math.max(26, params.distance * SCALE));
-  // the light sits opposite the shadow: angle is the shadow direction, the sun is at angle + 180
   const lightRad = ((params.angle + 180) * Math.PI) / 180;
   const hx = centre.x + Math.cos(lightRad) * reach;
   const hy = centre.y + Math.sin(lightRad) * reach;
@@ -342,16 +173,13 @@ function drawPreview() {
   ctx.lineWidth = 1.3;
   for (let ray = 0; ray < 8; ray += 1) {
     const rayAngle = lightRad + Math.PI / 2 + (ray * Math.PI) / 4;
-    const inner = 11;
-    const outer = 15;
     ctx.beginPath();
-    ctx.moveTo(hx + Math.cos(rayAngle) * inner, hy + Math.sin(rayAngle) * inner);
-    ctx.lineTo(hx + Math.cos(rayAngle) * outer, hy + Math.sin(rayAngle) * outer);
+    ctx.moveTo(hx + Math.cos(rayAngle) * 11, hy + Math.sin(rayAngle) * 11);
+    ctx.lineTo(hx + Math.cos(rayAngle) * 15, hy + Math.sin(rayAngle) * 15);
     ctx.stroke();
   }
   ctx.restore();
 
-  // live readout while dragging, like the Figma plugin's brightness chip
   if (dragging) {
     const label = Math.round(params.angle) + "°  ·  " + Math.round(params.distance) + " px";
     ctx.save();
@@ -374,53 +202,117 @@ function handlePointer(event) {
   const y = ((event.clientY - rect.top) / rect.height) * canvas.height;
   const centre = canvasCentre();
   const vector = Shadow.vectorToAngleDistance((x - centre.x) / SCALE, (y - centre.y) / SCALE, 2000);
-  // the handle is the light: dragging it to the upper right throws the shadow to the lower left
+  // the handle is the light: dragging it up-right throws the shadow down-left
   el.angle.value = String(Math.round(((vector.angle + 180) % 360) * 10) / 10);
   el.distance.value = String(vector.distance);
   scheduleDraw();
 }
 
-async function inspectEffects() {
-  el.badge.textContent = "Inspecting…";
-  el.badge.className = "badge busy";
+/* ---------- document actions ---------- */
+
+async function selectedLayer() {
+  const doc = await api.documents.active();
+  if (!doc) throw new Error("No active document. Open an image in Photon first.");
+  const ids = doc.selectedLayerIds || [];
+  const layerId = ids[ids.length - 1];
+  if (!layerId) throw new Error("Select one layer in the Layers panel first.");
+  return { doc, layerId };
+}
+
+function markPreview() {
+  el.removePreview.hidden = !preview;
+}
+
+async function dropPreview() {
+  if (!preview) return;
+  const current = preview;
+  preview = null;
   try {
     const doc = await api.documents.active();
-    if (!doc) throw new Error("No active document.");
-    const described = await api.documents.execute("effect.describe", { kind: "dropShadow" }, doc.id);
-    const names = [...Shadow.describeToMap(described).keys()];
-    const selectedId = (doc.selectedLayerIds || []).slice(-1)[0];
-    const layer = (doc.layers || []).find((item) => item.id === selectedId);
-    const stored = layer && (layer.styles || layer.effects || layer.layerEffects || null);
-    el.debugLog.textContent =
-      "dropShadow parameters (" + names.length + "): " + names.join(", ") +
-      "\n\n" + JSON.stringify(described, null, 1) +
-      "\n\nstored layer styles:\n" + JSON.stringify(stored, null, 1) +
-      "\n\nlast payload sent:\n" + JSON.stringify(lastPayload, null, 1);
-    el.badge.textContent = "Ready";
-    el.badge.className = "badge ok";
-    setStatus("inspected " + names.length + " parameter(s)");
+    if (doc) await Shadow.restoreLayerStyles(api, doc.id, current.layerIds[0], current.stylesBefore);
+  } catch {
+    /* document closed; nothing to clean */
+  }
+  markPreview();
+}
+
+async function build() {
+  const { doc, layerId } = await selectedLayer();
+  const startedAt = performance.now();
+  const result = await Shadow.applyLayerStyles(api, {
+    documentId: doc.id,
+    layerId,
+    params: lastParams,
+  });
+  const elapsed = Math.round(performance.now() - startedAt);
+  // kept for debugging when a host ignores a parameter: visible in the plugin console
+  console.debug("[directional-shadow]", "format=" + result.colourFormat, result.payloads[0]);
+  preview = result;
+  markPreview();
+  el.meta.textContent = elapsed + " ms · " + result.effects + " shadows · " + result.colourFormat;
+  return result;
+}
+
+async function runPreview() {
+  if (busy) return;
+  setBusy(true);
+  badge("Working…", "busy");
+  try {
+    lastParams = readParams();
+    await dropPreview();
+    setStatus("adding " + Shadow.STEPS + " drop shadows…");
+    await build();
+    badge("Preview", "busy");
+    setStatus("preview on the selected layer — Apply keeps it, Remove preview undoes it");
   } catch (error) {
-    el.debugLog.textContent = "effect.describe failed: " + errText(error);
-    el.badge.textContent = "Failed";
-    el.badge.className = "badge danger";
-    setStatus("inspect failed");
+    badge("Failed", "danger");
+    setStatus(errText(error));
+  } finally {
+    setBusy(false);
   }
 }
 
+async function runApply() {
+  if (busy) return;
+  setBusy(true);
+  badge("Working…", "busy");
+  try {
+    lastParams = readParams();
+    if (preview) {
+      preview = null; // keep what is already on the layer, stop offering undo
+      markPreview();
+    } else {
+      setStatus("adding " + Shadow.STEPS + " drop shadows…");
+      await build();
+      preview = null;
+      markPreview();
+    }
+    await api.settings.set({ shadow: lastParams }).catch(() => {});
+    badge("Applied", "ok");
+    setStatus("shadow applied to the selected layer");
+  } catch (error) {
+    badge("Failed", "danger");
+    setStatus(errText(error));
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function runRemovePreview() {
+  if (busy) return;
+  setBusy(true);
+  try {
+    await dropPreview();
+    badge("Ready", "ok");
+    setStatus("preview removed");
+  } finally {
+    setBusy(false);
+  }
+}
+
+/* ---------- wiring ---------- */
+
 function wire() {
-  el.taper.addEventListener("change", () => {
-    el.taperEnd.disabled = !el.taper.checked || readMode() === "effects";
-  });
-  el.mode.addEventListener("change", () => {
-    const effects = readMode() === "effects";
-    el.rasterize.disabled = effects;
-    el.taper.disabled = false;
-    el.taperEnd.disabled = effects || !el.taper.checked;
-    el.modeHint.textContent = effects
-      ? "Effects go on the selected layer: editable, no duplicate, no taper."
-      : "N duplicated layers behind the subject: supports taper, rasterize optional.";
-    setStatus(effects ? "effects mode" : "copies mode");
-  });
   const canvas = el.previewCanvas;
   if (canvas) {
     canvas.addEventListener("pointerdown", (event) => {
@@ -433,15 +325,16 @@ function wire() {
     });
     const stop = () => {
       dragging = false;
+      scheduleDraw();
     };
     canvas.addEventListener("pointerup", stop);
     canvas.addEventListener("pointercancel", stop);
     canvas.addEventListener("pointerleave", stop);
   }
-  for (const input of [el.angle, el.distance, el.blur, el.colour, el.darkness, el.taperEnd]) {
+
+  for (const input of [el.angle, el.distance, el.blur, el.darkness, el.colour]) {
     input.addEventListener("input", () => scheduleDraw());
   }
-  el.inspect.addEventListener("click", () => void inspectEffects());
   el.preview.addEventListener("click", () => void runPreview());
   el.apply.addEventListener("click", () => void runApply());
   el.removePreview.addEventListener("click", () => void runRemovePreview());
@@ -456,9 +349,9 @@ async function init() {
   }
   applyParamsToUi(Shadow.normalise({ ...Shadow.DEFAULTS, ...(stored.shadow || {}) }));
   badge("Ready", "ok");
-  setStatus("select a layer, then Preview");
+  setStatus("drag the light, then Preview");
   drawPreview();
-  await markPreview();
+  markPreview();
 }
 
 if (!SDK) {

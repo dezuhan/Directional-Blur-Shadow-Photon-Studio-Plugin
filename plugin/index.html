@@ -53,59 +53,6 @@
         <button id="removePreview" class="button quiet" type="button" hidden>Remove preview</button>
       </div>
 
-      <details class="advanced">
-        <summary>Advanced</summary>
-
-        <div class="field">
-          <label class="label" for="mode">Mode</label>
-          <select id="mode" class="input">
-            <option value="effects" selected>Layer styles — adds N drop shadows to the selected layer</option>
-            <option value="copies">Layer copies — N layers, supports taper</option>
-          </select>
-          <p id="modeHint" class="hint">Effects go on the selected layer and stay editable in the Layer Style panel.</p>
-        </div>
-
-        <div class="field">
-          <label class="label" for="colourFormat">Shadow colour format</label>
-          <select id="colourFormat" class="input">
-            <option value="auto" selected>Auto — follow the host default</option>
-            <option value="hex">Hex with # — #FF0000</option>
-            <option value="hex-bare">Hex bare — FF0000</option>
-            <option value="rgb">RGB object — {space, r, g, b, a}</option>
-          </select>
-        </div>
-
-        <div class="field">
-          <label class="label" for="angleMode">Angle convention</label>
-          <select id="angleMode" class="input">
-            <option value="light-yup" selected>Photon / Photoshop — light angle, 0° right, 90° up</option>
-            <option value="shadow-ydown">Shadow offset — 0° right, 90° down</option>
-          </select>
-        </div>
-
-
-        <div class="row">
-          <div class="field">
-            <label class="label" for="taperEnd">Taper tip (%)</label>
-            <input id="taperEnd" class="input" type="number" min="1" max="500" step="5" value="90" disabled />
-          </div>
-        </div>
-
-        <label class="check">
-          <input type="checkbox" id="taper" />
-          <span>Enable taper (copies mode)</span>
-        </label>
-        <label class="check">
-          <input type="checkbox" id="rasterize" checked />
-          <span>Rasterize into one layer on Apply (copies mode)</span>
-        </label>
-
-        <div class="actions">
-          <button id="inspect" class="button quiet" type="button">Inspect effect parameters</button>
-        </div>
-        <pre id="debugLog" class="debug-log"></pre>
-      </details>
-
       <p id="hint" class="hint">
         Drag the light to aim the shadow. Preview writes the effects to the selected layer and can be undone with Remove preview.
       </p>
