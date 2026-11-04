@@ -929,3 +929,97 @@ select.input option {
   font-size: 9px;
   line-height: 14px;
 }
+
+
+/* ---------- shared footer, details and service check ---------- */
+
+.panel-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--sh-line);
+  color: var(--sh-muted);
+  font-size: 10px;
+  line-height: 16px;
+}
+
+.footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sh-accent);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.link-button:hover {
+  color: var(--sh-text);
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.overlay[hidden] {
+  display: none;
+}
+
+.overlay-card {
+  width: 100%;
+  max-width: 420px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: var(--sh-radius-card);
+  background: var(--sh-popup-bg);
+  box-shadow: var(--sh-hairline), var(--sh-shadow-popup);
+}
+
+.overlay-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.overlay-title {
+  color: var(--sh-text);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.overlay-log {
+  margin: 0;
+  max-height: 50vh;
+  overflow: auto;
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--sh-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  line-height: 15px;
+  white-space: pre-wrap;
+}

@@ -22,6 +22,11 @@ const el = {
   cardSwatchBtn: document.getElementById("cardSwatchBtn"),
   cardSwatchDot: document.getElementById("cardSwatchDot"),
   pickerTitle: document.getElementById("pickerTitle"),
+  detailsBtn: document.getElementById("detailsBtn"),
+  serviceBtn: document.getElementById("serviceBtn"),
+  detailsOverlay: document.getElementById("detailsOverlay"),
+  detailsClose: document.getElementById("detailsClose"),
+  detailsLog: document.getElementById("detailsLog"),
   darkness: document.getElementById("darkness"),
   colour: document.getElementById("colour"),
   apply: document.getElementById("apply"),
@@ -60,6 +65,46 @@ function badge(text, kind) {
 
 function setStatus(text) {
   el.status.textContent = text;
+}
+
+let detailsLines = [];
+
+function addDetail(line) {
+  const stamp = new Date().toLocaleTimeString();
+  detailsLines.unshift("[" + stamp + "] " + line);
+  if (detailsLines.length > 200) detailsLines.pop();
+  if (!el.detailsOverlay.hidden) renderDetails();
+}
+
+function renderDetails() {
+  el.detailsLog.textContent = detailsLines.length ? detailsLines.join("\n") : "No log yet.";
+}
+
+function openDetails() {
+  renderDetails();
+  el.detailsOverlay.hidden = false;
+}
+
+async function checkService() {
+  addDetail("check service…");
+  if (!api) {
+    addDetail("SDK: unavailable — open the panel inside Photon Studio.");
+    openDetails();
+    return;
+  }
+  try {
+    const doc = await api.documents.active();
+    if (!doc) addDetail("document: none open");
+    else {
+      addDetail(
+        "document: " + (doc.title || doc.id) + " · " + (doc.layers || []).length + " layer(s) · " +
+          (doc.selectedLayerIds || []).length + " selected",
+      );
+    }
+  } catch (error) {
+    addDetail("check failed: " + errText(error));
+  }
+  openDetails();
 }
 
 function errText(error) {
@@ -509,6 +554,7 @@ async function runApply() {
   } catch (error) {
     badge("Failed", "danger");
     setStatus(errText(error));
+    addDetail("apply failed: " + errText(error));
   } finally {
     setBusy(false);
   }
@@ -560,6 +606,12 @@ function wire() {
   el.kind.addEventListener("change", () => scheduleDraw());
   el.blend.addEventListener("change", () => scheduleDraw());
   el.apply.addEventListener("click", () => void runApply());
+  el.detailsBtn.addEventListener("click", openDetails);
+  el.serviceBtn.addEventListener("click", () => void checkService());
+  el.detailsClose.addEventListener("click", () => (el.detailsOverlay.hidden = true));
+  el.detailsOverlay.addEventListener("click", (event) => {
+    if (event.target === el.detailsOverlay) el.detailsOverlay.hidden = true;
+  });
   el.removePreview.addEventListener("click", () => void runRemovePreview());
 }
 
@@ -576,6 +628,7 @@ async function init() {
   setColour(el.colour.value, { quiet: true });
   badge("Ready", "ok");
   setStatus("drag the light, then Preview");
+  addDetail("panel ready · v0.17.1");
   drawPreview();
   markPreview();
 }

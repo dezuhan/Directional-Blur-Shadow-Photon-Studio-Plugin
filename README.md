@@ -75,6 +75,13 @@ MIT licensed — see [LICENSE](LICENSE).
 
 ## Changelog
 
+### 0.17.1
+
+- Footer follows the shared plugin pattern: version on the left, **Details** and **Check service**
+  on the right. Details shows the plugin log; Check service reports the active document and layer
+  selection.
+- Removed the long hint under the values.
+
 ### 0.17.0
 
 - The box colour gets its own rounded-square swatch immediately left of the round shadow swatch.

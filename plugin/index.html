@@ -86,10 +86,6 @@
           </label>
         </div>
 
-        <p class="hint adv-hint">
-          Click the white card to change its colour. Blend mode previews live; Apply sends it when
-          Photon exposes a blend parameter for layer styles.
-        </p>
       </div>
 
 
@@ -127,9 +123,24 @@
       </p>
 
       <footer class="panel-footer">
-        <span id="status">idle</span>
-        <span id="meta" class="hint"></span>
+        <span id="version">v0.17.1</span>
+        <div class="footer-actions">
+          <button id="detailsBtn" class="link-button" type="button">Details</button>
+          <button id="serviceBtn" class="link-button" type="button">Check service</button>
+        </div>
+        <span id="status" hidden></span>
+        <span id="meta" hidden></span>
       </footer>
+
+      <div class="overlay" id="detailsOverlay" hidden>
+        <div class="overlay-card" role="dialog" aria-label="Plugin details and logs">
+          <header class="overlay-head">
+            <span class="overlay-title">Details</span>
+            <button id="detailsClose" class="link-button" type="button">Close</button>
+          </header>
+          <pre id="detailsLog" class="overlay-log log"></pre>
+        </div>
+      </div>
     </main>
 
     <script src="select.js"></script>
