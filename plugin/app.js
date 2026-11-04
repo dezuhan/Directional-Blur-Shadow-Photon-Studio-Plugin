@@ -12,6 +12,8 @@ const Colour = globalThis.PhotonColour;
 
 const el = {
   badge: document.getElementById("badge"),
+  state: document.getElementById("state"),
+  sep: document.getElementById("sep"),
   angle: document.getElementById("angle"),
   distance: document.getElementById("distance"),
   soft: document.getElementById("soft"),
@@ -45,6 +47,10 @@ let hsv = { h: 0, s: 0, v: 0 };
 function badge(text, kind) {
   el.badge.textContent = text;
   el.badge.className = "badge " + (kind || "ok");
+  const activity = kind === "busy" ? "Working" : kind === "danger" ? "Error" : text === "Applied" ? "Done" : text === "Ready" ? "Idle" : text;
+  el.state.textContent = activity;
+  el.state.hidden = !activity;
+  el.sep.hidden = !activity;
 }
 
 function setStatus(text) {

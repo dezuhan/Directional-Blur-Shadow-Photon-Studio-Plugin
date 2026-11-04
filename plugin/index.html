@@ -9,6 +9,8 @@
     <main class="panel">
       <header class="panel-head">
         <h1 class="title">Directional Shadow</h1>
+        <span id="state" class="state">Idle</span>
+        <span id="sep" class="sep" aria-hidden="true">·</span>
         <span id="badge" class="badge ok">Ready</span>
       </header>
 
@@ -42,10 +44,13 @@
 
           <label class="mini mini-wide">
             <span>Type</span>
-            <select id="kind">
-              <option value="dropShadow" selected>Drop shadow</option>
-              <option value="innerShadow">Inner shadow</option>
-            </select>
+            <span class="select">
+              <select id="kind">
+                <option value="dropShadow" selected>Drop shadow</option>
+                <option value="innerShadow">Inner shadow</option>
+              </select>
+              <span class="chevron" aria-hidden="true"></span>
+            </span>
           </label>
         </details>
       </div>
@@ -84,6 +89,7 @@
       </footer>
     </main>
 
+    <script src="select.js"></script>
     <script src="colour.js"></script>
     <script src="shadow.js"></script>
     <script src="app.js"></script>

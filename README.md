@@ -15,6 +15,12 @@ the layer.
 | --- | --- | --- |
 | ![Drop shadow panel](docs/panel.png) | ![Colour picker](docs/picker.png) | ![Inner shadow mode](docs/inner.png) |
 
+## Design system
+
+Panel styling, components and tokens follow [`../design-system`](../design-system/README.md):
+24 px controls, 7 px control radius, 12 px floating surfaces, the canonical `select.js`
+dropdown and the shared header/footer contract.
+
 ## Install
 
 1. Photon Studio → **Preferences → Plug-ins → Install plugin** → select this repository's
@@ -63,3 +69,12 @@ An Apply sends four operations: `documents.active` ×2, `effect.describe`, `laye
   whole styles snapshot.
 
 MIT licensed — see [LICENSE](LICENSE).
+
+## Changelog
+
+### 0.14.2
+
+- Header now carries the design-system activity word (`Idle · Ready`) alongside the badge.
+- The shadow Type dropdown uses the canonical `select.js` component (custom glass menu)
+  instead of the native OS menu.
+
