@@ -32,7 +32,7 @@
           <div class="mini-row">
             <label class="mini">
               <span>Light %</span>
-              <input id="darkness" type="number" min="10" max="300" step="5" value="100" />
+              <input id="darkness" type="number" min="1" max="100" step="1" value="100" />
             </label>
             <label class="mini">
               <span>Soft px</span>
@@ -83,22 +83,8 @@
           </select>
         </div>
 
-        <div class="row">
-          <div class="field">
-            <label class="label" for="steps">Layers</label>
-            <input id="steps" class="input" type="number" min="3" max="30" step="1" value="5" />
-          </div>
-          <div class="field">
-            <label class="label" for="startOpacity">Start opacity (%)</label>
-            <input id="startOpacity" class="input" type="number" min="1" max="100" step="1" value="44" />
-          </div>
-        </div>
 
         <div class="row">
-          <div class="field">
-            <label class="label" for="endOpacity">End opacity (%)</label>
-            <input id="endOpacity" class="input" type="number" min="0" max="100" step="1" value="1" />
-          </div>
           <div class="field">
             <label class="label" for="taperEnd">Taper tip (%)</label>
             <input id="taperEnd" class="input" type="number" min="1" max="500" step="5" value="90" disabled />

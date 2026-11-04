@@ -58,57 +58,27 @@ function fakeApi(options) {
 const tests = [];
 const test = (name, fn) => tests.push([name, fn]);
 
-test("planLayers defaults to 5 layers and eases the ramps", () => {
-  assert.equal(Shadow.DEFAULTS.steps, 5);
-  const { params, layers } = Shadow.planLayers({ steps: 5, distance: 150, blur: 26, startOpacity: 100, endOpacity: 5 });
-  assert.equal(params.steps, 5);
+test("planLayers always produces the 5-step Figma preset", () => {
+  assert.equal(Shadow.STEPS, 5);
+  assert.equal(Shadow.DEFAULTS.steps, undefined, "the step count is no longer configurable");
+  const { layers } = Shadow.planLayers({ distance: 150, blur: 26, darkness: 100 });
   assert.equal(layers.length, 5);
-  const far = layers[0];
-  const near = layers[layers.length - 1];
-  assert.ok(Math.abs(far.target - 0.05) < 1e-9, "farthest layer sits on endOpacity");
-  assert.ok(Math.abs(near.target - 1) < 1e-9, "nearest layer lands exactly on startOpacity");
-  assert.ok(far.blur > near.blur, "farther layers blur more");
-  for (let index = 1; index < layers.length; index += 1) {
-    assert.ok(layers[index].opacity >= layers[index - 1].opacity, "opacity grows towards the object");
-  }
+  assert.deepEqual(layers.map((l) => Math.round(l.opacity * 100)), [2, 15, 50, 85, 98]);
 });
 
-test("offsets and blur follow the Beautiful Shadows ramps", () => {
-  const { layers } = Shadow.planLayers({ steps: 5, distance: 150, blur: 26, angle: 0 });
-  const offsets = layers.map((layer) => Math.round(layer.dx));
-  assert.deepEqual(offsets, [150, 96, 54, 24, 6], "quadratic distance ramp (t^2 * 150)");
-  const blurs = layers.map((layer) => Math.round(layer.blur));
-  assert.deepEqual(blurs, [26, 22, 18, 14, 8], "blur eases with t^0.7");
+test("offsets and blur follow the Beautiful Shadows presets", () => {
+  const { layers } = Shadow.planLayers({ distance: 150, blur: 26, angle: 0 });
+  assert.deepEqual(layers.map((l) => Math.round(l.dx)), [150, 96, 54, 24, 6], "distance x [1, .64, .36, .16, .04]");
+  assert.deepEqual(layers.map((l) => Math.round(l.blur)), [26, 24, 20, 15, 8], "softness x [1, .91, .76, .57, .3]");
 });
 
-test("direct mode uses the ramp value, composite mode normalises", () => {
-  const direct = Shadow.planLayers({ steps: 5, startOpacity: 100, endOpacity: 5 }, "direct").layers[0];
-  const composite = Shadow.planLayers({ steps: 5, startOpacity: 100, endOpacity: 5 }).layers[0];
-  assert.ok(Math.abs(direct.opacity - 0.05) < 1e-9, "direct mode keeps the ramp opacity");
-  assert.ok(composite.opacity < direct.opacity, "composite mode divides the load across layers");
-});
-
-test("step count does not darken the composite (Beer-Lambert normalisation)", () => {
-  const composite = (steps) => {
-    const { layers } = Shadow.planLayers({ steps, startOpacity: 50, endOpacity: 50, darkness: 100 });
-    // alpha-over of N equally opaque layers: 1 - (1 - a)^N
-    const alpha = layers[0].opacity;
-    return 1 - Math.pow(1 - alpha, layers.length);
-  };
-  assert.ok(Math.abs(composite(3) - 0.5) < 1e-9, "3 layers compose to 0.5");
-  assert.ok(Math.abs(composite(10) - 0.5) < 1e-9, "10 layers compose to 0.5");
-  assert.ok(Math.abs(composite(30) - 0.5) < 1e-9, "30 layers compose to 0.5");
-});
-
-test("darkness deepens without clipping the gradient", () => {
-  const at = (darkness) => Shadow.planLayers({ steps: 4, startOpacity: 50, endOpacity: 50, darkness }).layers[0].opacity;
-  const base = at(100);
-  const doubled = at(200);
-  const extreme = at(300);
-  // 1 - (1 - raw)^k: deeper, strictly increasing, always < 1
-  assert.ok(Math.abs(doubled - (1 - Math.pow(1 - base, 2))) < 1e-9);
-  assert.ok(doubled > base && extreme > doubled);
-  assert.ok(extreme < 1, "300 % does not clip to fully opaque");
+test("lighting scales every layer linearly and caps at 100 %", () => {
+  const at = (darkness) => Shadow.planLayers({ darkness }).layers.map((l) => Math.round(l.opacity * 100));
+  assert.deepEqual(at(100), [2, 15, 50, 85, 98]);
+  assert.deepEqual(at(45), [1, 7, 23, 38, 44], "matches the Figma plugin at Brightness 45 %");
+  assert.deepEqual(at(70), [1, 11, 35, 60, 69]);
+  assert.equal(Shadow.normalise({ darkness: 300 }).darkness, 100, "the input cannot exceed 100 %");
+  assert.deepEqual(at(300), at(100));
 });
 
 test("angle: 0° points right, 90° points down", () => {
@@ -145,14 +115,11 @@ test("rgba() converts hex to Photon colour", () => {
 });
 
 test("normalise clamps ranges and rejects junk colour", () => {
-  const params = Shadow.normalise({ angle: -10, distance: 99999, steps: 1, blur: 0, startOpacity: 500, endOpacity: -5, darkness: 900, taperEnd: 0, colour: "red" });
+  const params = Shadow.normalise({ angle: -10, distance: 99999, blur: 0, darkness: 900, taperEnd: 0, colour: "red" });
   assert.equal(params.angle, 0);
   assert.equal(params.distance, 2000);
-  assert.equal(params.steps, 3);
   assert.equal(params.blur, 0.1);
-  assert.equal(params.startOpacity, 100);
-  assert.equal(params.endOpacity, 0);
-  assert.equal(params.darkness, 300);
+  assert.equal(params.darkness, 100);
   assert.equal(params.taperEnd, 1);
   assert.equal(params.colour, "#000000");
 });
@@ -162,18 +129,18 @@ test("buildShadow runs the full pipeline per layer", async () => {
   const result = await Shadow.buildShadow(api, {
     documentId: "doc-1",
     sourceLayerId: "src",
-    params: { steps: 4, angle: 0, distance: 100, blur: 20, taper: false, rasterize: true },
+    params: { angle: 0, distance: 100, blur: 20, taper: false, rasterize: true },
   });
-  assert.equal(result.layerIds.length, 4);
+  assert.equal(result.layerIds.length, 5);
   assert.equal(result.groupId, "group1");
 
   const ops = calls.map((call) => call.operation);
-  assert.equal(ops.filter((op) => op === "layer.duplicate").length, 4, "one duplicate per step");
-  assert.equal(ops.filter((op) => op === "pixels.fill").length, 4);
-  assert.equal(ops.filter((op) => op === "filter.blur.gaussianBlur").length, 4);
-  assert.equal(ops.filter((op) => op === "layer.update").length, 5, "opacity per layer + group rename");
-  assert.equal(ops.filter((op) => op === "layer.translate").length, 4);
-  assert.equal(ops.filter((op) => op === "layer.move").length, 4);
+  assert.equal(ops.filter((op) => op === "layer.duplicate").length, 5, "one duplicate per step");
+  assert.equal(ops.filter((op) => op === "pixels.fill").length, 5);
+  assert.equal(ops.filter((op) => op === "filter.blur.gaussianBlur").length, 5);
+  assert.equal(ops.filter((op) => op === "layer.update").length, 6, "opacity per layer + group rename");
+  assert.equal(ops.filter((op) => op === "layer.translate").length, 5);
+  assert.equal(ops.filter((op) => op === "layer.move").length, 5);
   assert.equal(ops.filter((op) => op === "layer.group").length, 1);
   assert.equal(ops.filter((op) => op === "layer.rasterize").length, 1);
 
@@ -189,7 +156,7 @@ test("buildShadow runs the full pipeline per layer", async () => {
 
   const moves = calls.filter((call) => call.operation === "layer.move");
   const indices = moves.map((call) => call.params.placement.index);
-  assert.deepEqual(indices, [2, 3, 4, 5], "shadow layers land directly under the source, in order");
+  assert.deepEqual(indices, [2, 3, 4, 5, 6], "shadow layers land directly under the source, in order");
   assert.equal(result.topFirst, true);
 });
 
@@ -198,9 +165,10 @@ test("buildShadow honours taper and skips rasterize", async () => {
   await Shadow.buildShadow(api, {
     documentId: "doc-1",
     sourceLayerId: "src",
-    params: { steps: 3, taper: true, taperEnd: 50, rasterize: false },
+    params: { taper: true, taperEnd: 50, rasterize: false },
   });
-  assert.equal(calls.filter((call) => call.operation === "core.canvas.applyLayerTransform").length, 3);
+  // the nearest layer has perpScale 1 (no taper at t = 0), so four of the five copies transform
+  assert.equal(calls.filter((call) => call.operation === "core.canvas.applyLayerTransform").length, 4);
   assert.equal(calls.filter((call) => call.operation === "layer.rasterize").length, 0);
   const transform = calls.find((call) => call.operation === "core.canvas.applyLayerTransform");
   assert.equal(transform.params.matrix.length, 6);
@@ -348,7 +316,7 @@ test("applyLayerStyles writes drop shadows onto the selected layer, no duplicate
     assert.ok(shadow.opacity > 0 && shadow.opacity <= 100);
   }
   assert.ok(shadows[0].distance > shadows[4].distance, "far shadow travels further");
-  assert.equal(shadows[4].opacity, 44, "nearest shadow lands on startOpacity");
+  assert.equal(shadows[4].opacity, 98, "nearest shadow carries the 98 % preset at lighting 100 %");
 });
 
 test("applyLayerStyles keeps the layer's existing effects", async () => {
@@ -366,11 +334,11 @@ test("applyLayerStyles keeps the layer's existing effects", async () => {
   const result = await Shadow.applyLayerStyles(api, {
     documentId: "doc-1",
     layerId: "src",
-    params: { steps: 3 },
+    params: {},
   });
 
   const set = api.calls.find((c) => c.operation === "layer.effects.set");
-  assert.equal(set.params.styles.dropShadows.length, 4, "existing shadow kept + 3 new");
+  assert.equal(set.params.styles.dropShadows.length, 6, "existing shadow kept + 5 new");
   assert.deepEqual(set.params.styles.dropShadows[0], existing.dropShadows[0]);
   assert.equal(result.stylesBefore.dropShadows.length, 1, "the snapshot holds the original styles");
 });

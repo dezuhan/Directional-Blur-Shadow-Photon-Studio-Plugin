@@ -17,12 +17,9 @@ const el = {
   modeHint: document.getElementById("modeHint"),
   angle: document.getElementById("angle"),
   distance: document.getElementById("distance"),
-  steps: document.getElementById("steps"),
   blur: document.getElementById("blur"),
   colour: document.getElementById("colour"),
   darkness: document.getElementById("darkness"),
-  startOpacity: document.getElementById("startOpacity"),
-  endOpacity: document.getElementById("endOpacity"),
   taper: document.getElementById("taper"),
   taperEnd: document.getElementById("taperEnd"),
   rasterize: document.getElementById("rasterize"),
@@ -65,11 +62,8 @@ function readParams() {
   return Shadow.normalise({
     angle: el.angle.value,
     distance: el.distance.value,
-    steps: el.steps.value,
     blur: el.blur.value,
     colour: el.colour.value,
-    startOpacity: el.startOpacity.value,
-    endOpacity: el.endOpacity.value,
     darkness: el.darkness.value,
     taper: el.taper.checked,
     taperEnd: el.taperEnd.value,
@@ -80,12 +74,9 @@ function readParams() {
 function applyParamsToUi(params) {
   el.angle.value = String(params.angle);
   el.distance.value = String(params.distance);
-  el.steps.value = String(params.steps);
   el.blur.value = String(params.blur);
   el.colour.value = params.colour;
   el.darkness.value = String(params.darkness);
-  el.startOpacity.value = String(params.startOpacity);
-  el.endOpacity.value = String(params.endOpacity);
   el.taper.checked = Boolean(params.taper);
   el.taperEnd.value = String(params.taperEnd);
   el.taperEnd.disabled = !params.taper;
@@ -160,7 +151,7 @@ async function runPreview() {
     await dropPreview();
     const { doc, layerId } = await selectedLayer();
     const mode = readMode();
-    setStatus(mode === "effects" ? "adding " + lastParams.steps + " drop shadows…" : "building " + lastParams.steps + " layers…");
+    setStatus(mode === "effects" ? "adding " + Shadow.STEPS + " drop shadows…" : "building " + Shadow.STEPS + " layers…");
     const startedAt = performance.now();
     preview = await buildFor(doc, layerId, lastParams, mode);
     lastPayload = (preview && preview.payloads) || null;
@@ -198,7 +189,7 @@ async function runApply() {
 
     const mode = readMode();
     if (!preview) {
-      setStatus(mode === "effects" ? "adding " + lastParams.steps + " drop shadows…" : "building " + lastParams.steps + " layers…");
+      setStatus(mode === "effects" ? "adding " + Shadow.STEPS + " drop shadows…" : "building " + Shadow.STEPS + " layers…");
       preview = await buildFor(doc, layerId, lastParams, mode);
       preview.mode = mode;
     }
@@ -447,7 +438,7 @@ function wire() {
     canvas.addEventListener("pointercancel", stop);
     canvas.addEventListener("pointerleave", stop);
   }
-  for (const input of [el.angle, el.distance, el.steps, el.blur, el.colour, el.darkness, el.startOpacity, el.endOpacity, el.taperEnd]) {
+  for (const input of [el.angle, el.distance, el.blur, el.colour, el.darkness, el.taperEnd]) {
     input.addEventListener("input", () => scheduleDraw());
   }
   el.inspect.addEventListener("click", () => void inspectEffects());

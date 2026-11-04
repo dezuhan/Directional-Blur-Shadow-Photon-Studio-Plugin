@@ -27,50 +27,26 @@ Nothing is written to the document until Preview or Apply is pressed.
 | --- | --- | --- | --- |
 | Angle (°) | 0–360 | 30 | 0° = right, 90° = down (clockwise on screen) |
 | Distance (px) | 1–2000 | 150 | How far the shadow travels from the layer |
-| Layers | 3–30 | **5** | Number of stacked shadows (Beautiful Shadows uses 5) |
-| Softness (px) | 1–300 | **26** | Blur at the far end of the shadow |
+| Softness (px) | 1–300 | 26 | Blur at the far end of the shadow |
+| Lighting (%) | 1–100 | 100 | Scales every layer's opacity, like Brightness in Figma |
 | Colour | hex | #000000 | Silhouette colour |
-| Lighting strength (%) | 10–300 | 100 | Multiplies the whole falloff |
-| Start opacity (%) | 1–100 | **44** | Opacity target nearest the layer |
-| End opacity (%) | 0–100 | **1** | Opacity target at the far end |
-| Taper (narrow/expand) | on/off | off | Scales each copy perpendicular to the direction |
-| Size at tip (%) | 1–500 | 90 | Taper amount at the far end |
-| Rasterize into one layer | on/off | on | Applied only when you press Apply |
+| Taper (narrow/expand) | on/off | off | Copies mode only |
+| Size at tip (%) | 1–500 | 90 | Copies mode only |
+| Rasterize into one layer | on/off | on | Copies mode only |
 
-## Ramps (matching Beautiful Shadows)
+**The step count is fixed at 5**, matching the Beautiful Shadows plugin, and the opacity follows the
+same preset:
 
-The defaults reproduce the Figma plugin's 5-shadow ramp:
-
-| Layer | Offset (px) | Blur (px) | Opacity |
+| Step | Offset | Blur | Opacity at lighting 100 % |
 | --- | --- | --- | --- |
-| 1 (far) | 150 | 26 | 1% |
-| 2 | 96 | 22 | 9% |
-| 3 | 54 | 18 | 22% |
-| 4 | 24 | 14 | 30% |
-| 5 (near) | 6 | 8 | 44% |
+| 1 (far) | distance × 1.00 | softness × 1.00 | 2 % |
+| 2 | distance × 0.64 | softness × 0.91 | 15 % |
+| 3 | distance × 0.36 | softness × 0.76 | 50 % |
+| 4 | distance × 0.16 | softness × 0.57 | 85 % |
+| 5 (near) | distance × 0.04 | softness × 0.30 | 98 % |
 
-Offset grows with `t²`, blur with `t^0.7`, opacity with `(1 − t)²` (t = 1 at the far end).
-Drop-shadow layer styles use the ramp value directly; the copies mode still normalises each
-layer's opacity for alpha-over compositing.
-
-## Preview, not live document edits
-
-The canvas preview updates instantly while you drag or type, but **the document is only changed
-when you press Preview or Apply** — no silent rebuilding while dragging. Press
-**Remove preview** to delete the preview layer.
-
-## Realtime direction preview
-
-The panel draws its own preview on a canvas using the same maths as the document build:
-
-- every shadow step is painted with `blur(radius × scale)` and the per-step opacity, so you see a
-  soft stack instead of hard copies;
-- the handle at the end of the line can be **dragged** to set angle and distance
-  (`vectorToAngleDistance`), and the inputs update live;
-- with **Live update** on, dragging the handle also rebuilds the document preview (debounced
-  ~220 ms) so the real shadow follows your hand;
-- **Diagnostics → Inspect effect parameters** dumps the host's real `dropShadow` parameter names,
-  which is how the effect mapping is verified on a given Photon build.
+Opacity is simply `lighting × preset`, so at 45 % the five layers become 1 / 7 / 23 / 38 / 44 % —
+exactly the values the Figma plugin shows.
 
 ## Two build modes
 
@@ -130,6 +106,16 @@ from that. The shadow therefore lands directly behind the subject in either conv
   preview on screen leaves it behind — press **Remove preview** first.
 
 ## Changelog
+
+### 0.11.0
+
+- **Five steps, fixed.** The Layers field is gone; the plugin always builds the Beautiful Shadows
+  preset (offset × [1, .64, .36, .16, .04], blur × [1, .91, .76, .57, .3]).
+- **Opacity follows the Figma formula:** `lighting × [2, 15, 50, 85, 98] %`, so lighting 45 % gives
+  the 1 / 7 / 23 / 38 / 44 % column the Figma plugin shows.
+- **Lighting is capped at 100 %** (was 10–300 %). Start/end opacity fields removed — they no longer
+  have a meaning with the preset.
+- Tests: 22.
 
 ### 0.10.2
 

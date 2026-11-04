@@ -27,16 +27,19 @@
   const DEFAULTS = {
     angle: 30,
     distance: 150,
-    steps: 5,
     blur: 26,
     colour: "#000000",
-    startOpacity: 44,
-    endOpacity: 1,
     darkness: 100,
     taper: false,
     taperEnd: 90,
     rasterize: true,
   };
+
+  /** Fixed 5-step preset, taken from the Beautiful Shadows plugin. Farthest → nearest. */
+  const STEPS = 5;
+  const DISTANCE_FACTORS = [1, 0.64, 0.36, 0.16, 0.04];
+  const BLUR_FACTORS = [1, 0.91, 0.76, 0.57, 0.3];
+  const OPACITY_FACTORS = [0.02, 0.15, 0.5, 0.85, 0.98];
 
   const GROUP_NAME = "Directional Blur Shadow";
 
@@ -51,12 +54,9 @@
     return {
       angle: clamp(params.angle, 0, 360),
       distance: clamp(params.distance, 1, 2000),
-      steps: Math.round(clamp(params.steps, 3, 30)),
       blur: clamp(params.blur, 0.1, 300),
       colour: /^#[0-9a-f]{6}$/i.test(String(params.colour)) ? params.colour : DEFAULTS.colour,
-      startOpacity: clamp(params.startOpacity, 1, 100),
-      endOpacity: clamp(params.endOpacity, 0, 100),
-      darkness: clamp(params.darkness, 10, 300),
+      darkness: clamp(params.darkness, 1, 100),
       taper: Boolean(params.taper),
       taperEnd: clamp(params.taperEnd, 1, 500),
       rasterize: Boolean(params.rasterize),
@@ -66,34 +66,30 @@
   /**
    * Per-layer plan, farthest first (index 0 = end of the shadow). Pure.
    *
-   * opacityMode "direct"    → ramp value as-is (independent layer styles, like the Figma plugin).
-   * opacityMode "composite" → normalised for stacked copies (1 − (1 − target)^(1/steps)).
+   * Five fixed steps from the Beautiful Shadows plugin:
+   *   offset  = distance × t²            (6, 24, 54, 96, 150 for distance 150)
+   *   blur    = softness × preset        (26, 24, 20, 15, 8 for softness 26)
+   *   opacity = lighting × preset         (2, 15, 50, 85, 98 % at lighting 100 %)
+   * Lighting scales every layer, so a lower value fades the whole shadow exactly like the Figma
+   * plugin's Brightness control.
    */
-  function planLayers(input, opacityMode) {
+  function planLayers(input) {
     const params = normalise(input);
-    const direct = opacityMode === "direct";
     const angleRad = (params.angle * Math.PI) / 180;
     const nx = Math.cos(angleRad);
     const ny = Math.sin(angleRad);
-    const start = params.startOpacity / 100;
-    const end = params.endOpacity / 100;
-    const darkness = params.darkness / 100;
+    const lighting = params.darkness / 100;
     const layers = [];
 
-    for (let step = params.steps; step >= 1; step -= 1) {
-      const t = step / params.steps;
-      const rampT = params.steps === 1 ? 0 : (t - 1 / params.steps) / (1 - 1 / params.steps);
-      const target = clamp(end + (start - end) * Math.pow(1 - rampT, 2), 0, 1);
-      const raw = direct ? target : 1 - Math.pow(1 - target, 1 / params.steps);
-      const shaded = darkness === 1 ? raw : 1 - Math.pow(1 - raw, darkness);
+    for (let index = 0; index < STEPS; index += 1) {
+      const t = 1 - index / (STEPS - 1); // 1 = farthest, 0 = nearest
       layers.push({
-        step,
+        step: STEPS - index,
         t,
-        dx: nx * params.distance * t * t,
-        dy: ny * params.distance * t * t,
-        blur: Math.max(0.1, params.blur * Math.pow(t, 0.7)),
-        target,
-        opacity: Math.min(1, shaded),
+        dx: nx * params.distance * DISTANCE_FACTORS[index],
+        dy: ny * params.distance * DISTANCE_FACTORS[index],
+        blur: Math.max(0.1, params.blur * BLUR_FACTORS[index]),
+        opacity: Math.min(1, lighting * OPACITY_FACTORS[index]),
         perpScale: 1 + (params.taperEnd / 100 - 1) * t,
       });
     }
@@ -496,7 +492,7 @@
   async function applyLayerStyles(api, options) {
     const documentId = options.documentId;
     const layerId = options.layerId;
-    const plan = planLayers(options.params, "direct");
+    const plan = planLayers(options.params);
     const onStep = options.onStep || (() => {});
     const doc = await api.documents.active();
     const layer = (doc.layers || []).find((item) => item.id === layerId);
@@ -550,6 +546,10 @@
   return {
     DEFAULTS,
     GROUP_NAME,
+    STEPS,
+    DISTANCE_FACTORS,
+    BLUR_FACTORS,
+    OPACITY_FACTORS,
     clamp,
     normalise,
     planLayers,
