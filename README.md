@@ -75,6 +75,11 @@ MIT licensed — see [LICENSE](LICENSE).
 
 ## Changelog
 
+### 0.18.5
+
+- Labels in the value rows are left-aligned so Type/Blend/Angle/Light share one vertical line;
+  the fields keep their aligned 60 px label column and common left edge.
+
 ### 0.18.4
 
 - The picker is shown before the canvases are measured, so the full-width HSV field renders its

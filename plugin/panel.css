@@ -824,7 +824,7 @@ select.input option {
   color: var(--sh-muted);
   font-size: 10px;
   letter-spacing: 0.01em;
-  text-align: right;
+  text-align: left;
   white-space: nowrap;
 }
 
