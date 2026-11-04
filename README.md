@@ -74,6 +74,11 @@ MIT licensed — see [LICENSE](LICENSE).
 
 ## Changelog
 
+### 0.16.2
+
+- The single-column value grid now triggers at panel widths up to 350 px (was 430 px); wider
+  panels keep the 2x2 grid.
+
 ### 0.16.1
 
 - Responsive value grid: at panel widths up to 430 px the Angle/Distance/Light/Soft fields stack

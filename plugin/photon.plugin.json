@@ -3,7 +3,7 @@
   "sdkVersion": 1,
   "id": "photon-directional-shadow",
   "name": "Directional Shadow",
-  "version": "0.16.1",
+  "version": "0.16.2",
   "main": "index.html",
   "panels": [
     {
