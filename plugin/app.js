@@ -93,7 +93,7 @@ const CARD = { width: 112, height: 82 };
 const SCALE = 0.42;
 
 function canvasCentre() {
-  return { x: el.previewCanvas.width / 2, y: el.previewCanvas.height / 2 - 30 };
+  return { x: el.previewCanvas.width / 2, y: el.previewCanvas.height / 2 };
 }
 
 function roundRect(ctx, x, y, width, height, radius) {

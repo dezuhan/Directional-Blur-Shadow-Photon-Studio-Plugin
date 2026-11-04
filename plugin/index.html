@@ -15,45 +15,47 @@
       </header>
 
       <div class="stage">
-        <canvas id="previewCanvas" width="320" height="252" aria-label="Drag the light to aim the shadow"></canvas>
+        <canvas id="previewCanvas" width="320" height="320" aria-label="Drag the light to aim the shadow"></canvas>
 
-        <details class="sheet" open>
-          <summary>
-            <span class="sheet-title">Drop Shadow</span>
-          </summary>
-          <div class="mini-row">
-            <label class="mini">
-              <span>A °</span>
-              <input id="angle" type="number" min="0" max="360" step="1" value="30" />
-            </label>
-            <label class="mini">
-              <span>D px</span>
-              <input id="distance" type="number" min="1" max="300" step="1" value="150" />
-            </label>
-          </div>
-          <div class="mini-row">
-            <label class="mini">
-              <span>Light %</span>
-              <input id="darkness" type="number" min="1" max="100" step="1" value="100" />
-            </label>
-            <label class="mini">
-              <span>Soft %</span>
-              <input id="soft" type="number" min="1" max="100" step="1" value="75" />
-            </label>
-          </div>
 
-          <label class="mini mini-wide">
-            <span>Type</span>
-            <span class="select">
-              <select id="kind">
-                <option value="dropShadow" selected>Drop shadow</option>
-                <option value="innerShadow">Inner shadow</option>
-              </select>
-              <span class="chevron" aria-hidden="true"></span>
-            </span>
-          </label>
-        </details>
       </div>
+
+      <details class="sheet" open>
+        <summary>
+          <span class="sheet-title">Drop Shadow</span>
+        </summary>
+        <div class="mini-row">
+          <label class="mini">
+            <span>A °</span>
+            <input id="angle" type="number" min="0" max="360" step="1" value="30" />
+          </label>
+          <label class="mini">
+            <span>D px</span>
+            <input id="distance" type="number" min="1" max="300" step="1" value="150" />
+          </label>
+        </div>
+        <div class="mini-row">
+          <label class="mini">
+            <span>Light %</span>
+            <input id="darkness" type="number" min="1" max="100" step="1" value="100" />
+          </label>
+          <label class="mini">
+            <span>Soft %</span>
+            <input id="soft" type="number" min="1" max="100" step="1" value="75" />
+          </label>
+        </div>
+
+        <label class="mini mini-wide">
+          <span>Type</span>
+          <span class="select">
+            <select id="kind">
+              <option value="dropShadow" selected>Drop shadow</option>
+              <option value="innerShadow">Inner shadow</option>
+            </select>
+            <span class="chevron" aria-hidden="true"></span>
+          </span>
+        </label>
+      </details>
 
       <div class="actions">
         <button id="swatchBtn" class="swatch" type="button" title="Shadow colour">

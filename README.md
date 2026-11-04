@@ -72,6 +72,12 @@ MIT licensed — see [LICENSE](LICENSE).
 
 ## Changelog
 
+### 0.14.5
+
+- The preview is now a square, centred stage; the white card sits in the middle.
+- The Drop Shadow values moved out of the canvas: they form a normal panel below the preview and
+  above the Apply button, so the preview is no longer covered.
+
 ### 0.14.4
 
 - The light handle now follows the Distance control all the way to 300 px (126 canvas px at the

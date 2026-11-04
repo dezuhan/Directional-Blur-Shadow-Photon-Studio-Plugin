@@ -107,8 +107,10 @@ input:focus-visible {
 }
 
 .stage {
-  position: relative;
   display: flex;
+  width: 100%;
+  max-width: 340px;
+  margin: 0 auto;
   padding: 6px;
   border-radius: var(--sh-radius);
   background: var(--ph-black-3, rgba(0, 0, 0, 0.25));
@@ -119,6 +121,7 @@ input:focus-visible {
   display: block;
   width: 100%;
   height: auto;
+  aspect-ratio: 1 / 1;
   border-radius: 5px;
   cursor: grab;
   touch-action: none;
@@ -128,16 +131,14 @@ input:focus-visible {
   cursor: grabbing;
 }
 
-/* floating value sheet, like the Figma plugin's popover */
+/* values live below the square preview, above the Apply button */
 .sheet {
-  position: absolute;
-  left: 12px;
-  bottom: 10px;
-  width: 178px;
-  padding: 6px 7px 7px;
+  width: min(100%, 340px);
+  margin: 0 auto;
+  padding: 8px 9px 9px;
   border-radius: var(--sh-radius);
-  background: var(--ph-glass-plate-strong, rgba(12, 12, 12, 0.92));
-  box-shadow: var(--sh-hairline), 0 6px 18px rgba(0, 0, 0, 0.28);
+  background: var(--sh-raise), var(--sh-control);
+  box-shadow: var(--sh-hairline);
   font-size: 10px;
 }
 
