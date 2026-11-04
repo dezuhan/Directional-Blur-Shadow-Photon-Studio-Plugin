@@ -768,6 +768,17 @@ select.input option {
   margin-top: 2px;
 }
 
+/* Narrow Photon panels: stack the four values into one column. */
+.panel {
+  container-type: inline-size;
+}
+
+@container (max-width: 430px) {
+  .shadow-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .mini {
   display: grid;
   grid-template-columns: 60px minmax(0, 1fr);

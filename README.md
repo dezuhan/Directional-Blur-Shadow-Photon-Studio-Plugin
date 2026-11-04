@@ -74,6 +74,11 @@ MIT licensed — see [LICENSE](LICENSE).
 
 ## Changelog
 
+### 0.16.1
+
+- Responsive value grid: at panel widths up to 430 px the Angle/Distance/Light/Soft fields stack
+  into one column; wider panels keep the 2x2 grid. Type and Blend stay full-width on top.
+
 ### 0.16.0
 
 - Removed the Drop Shadow card and its title; the values sit directly on the panel.
