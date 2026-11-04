@@ -201,7 +201,7 @@ function handlePointer(event) {
   const x = ((event.clientX - rect.left) / rect.width) * canvas.width;
   const y = ((event.clientY - rect.top) / rect.height) * canvas.height;
   const centre = canvasCentre();
-  const vector = Shadow.vectorToAngleDistance((x - centre.x) / SCALE, (y - centre.y) / SCALE, 2000);
+  const vector = Shadow.vectorToAngleDistance((x - centre.x) / SCALE, (y - centre.y) / SCALE, 300);
   // the handle is the light: dragging it up-right throws the shadow down-left
   el.angle.value = String(Math.round(((vector.angle + 180) % 360) * 10) / 10);
   el.distance.value = String(vector.distance);

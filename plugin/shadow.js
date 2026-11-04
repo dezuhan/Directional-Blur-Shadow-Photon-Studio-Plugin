@@ -45,7 +45,7 @@
     const params = { ...DEFAULTS, ...(input || {}) };
     return {
       angle: ((clamp(params.angle, 0, 360) % 360) + 360) % 360,
-      distance: clamp(params.distance, 1, 2000),
+      distance: clamp(params.distance, 1, 300),
       blur: clamp(params.blur, 0.1, 300),
       colour: /^#[0-9a-f]{6}$/i.test(String(params.colour)) ? params.colour : DEFAULTS.colour,
       darkness: clamp(params.darkness, 1, 100),

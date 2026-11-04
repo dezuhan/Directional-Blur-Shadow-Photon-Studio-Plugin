@@ -18,7 +18,7 @@ A paper stage with a draggable **light handle** (sun with rays) and a floating *
 | Field | Range | Default | Meaning |
 | --- | --- | --- | --- |
 | `A °` | 0–360 | 30 | Shadow direction: 0° right, 90° down |
-| `D px` | 1–2000 | 150 | How far the shadow travels |
+| `D px` | 1–300 | 150 | How far the shadow travels |
 | `Light %` | 1–100 | 100 | Scales every layer's opacity (Figma's Brightness) |
 | `Soft px` | 1–300 | 26 | Blur at the far end |
 
@@ -91,6 +91,10 @@ styles snapshot/restore, and the single-write pipeline. A Preview sends **4 oper
 (`documents.active` ×2, `effect.describe`, `layer.effects.set`).
 
 ## Changelog
+
+### 0.12.1
+
+- Distance is capped at **300 px** (was 2000): the field, the clamp and the drag handle all agree.
 
 ### 0.12.0
 
