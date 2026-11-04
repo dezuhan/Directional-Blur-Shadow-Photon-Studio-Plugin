@@ -20,35 +20,7 @@
 
       </div>
 
-      <details class="sheet" open>
-        <summary>
-          <span class="sheet-title">Drop Shadow</span>
-        </summary>
-
-        <div class="shadow-grid">
-          <label class="mini">
-            <span>Angle</span>
-            <input id="angle" type="number" min="0" max="360" step="1" value="30" />
-          </label>
-          <label class="mini">
-            <span>Distance</span>
-            <input id="distance" type="number" min="1" max="300" step="1" value="150" />
-          </label>
-          <label class="mini">
-            <span>Light %</span>
-            <input id="darkness" type="number" min="1" max="100" step="1" value="100" />
-          </label>
-          <label class="mini">
-            <span>Soft %</span>
-            <input id="soft" type="number" min="1" max="100" step="1" value="75" />
-          </label>
-        </div>
-
-      </details>
-
-    <details class="advanced">
-      <summary>Advanced</summary>
-      <div class="adv-stack">
+            <div class="values">
         <div class="mini">
           <span>Type</span>
           <span class="select">
@@ -94,15 +66,33 @@
             <span class="chevron" aria-hidden="true"></span>
           </span>
         </div>
+
+        <div class="shadow-grid">
+          <label class="mini">
+            <span>Angle</span>
+            <input id="angle" type="number" min="0" max="360" step="1" value="30" />
+          </label>
+          <label class="mini">
+            <span>Distance</span>
+            <input id="distance" type="number" min="1" max="300" step="1" value="150" />
+          </label>
+          <label class="mini">
+            <span>Light %</span>
+            <input id="darkness" type="number" min="1" max="100" step="1" value="100" />
+          </label>
+          <label class="mini">
+            <span>Soft %</span>
+            <input id="soft" type="number" min="1" max="100" step="1" value="75" />
+          </label>
+        </div>
+
+        <p class="hint adv-hint">
+          Click the white card to change its colour. Blend mode previews live; Apply sends it when
+          Photon exposes a blend parameter for layer styles.
+        </p>
       </div>
-      <p class="hint adv-hint">
-        Click the white card to change its colour. Blend mode previews live; Apply sends it when
-        Photon exposes a blend parameter for layer styles.
-      </p>
-    </details>
 
-
-      <input id="cardColour" type="color" value="#f7f7f7" hidden />
+<input id="cardColour" type="color" value="#f7f7f7" hidden />
 
 
       <div class="actions">

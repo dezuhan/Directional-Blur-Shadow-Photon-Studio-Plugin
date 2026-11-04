@@ -755,10 +755,17 @@ select.input option {
   background: var(--sh-control);
 }
 
+.values {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
 .shadow-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 7px 10px;
+  margin-top: 2px;
 }
 
 .mini {

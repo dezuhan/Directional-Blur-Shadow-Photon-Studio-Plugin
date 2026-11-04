@@ -41,7 +41,7 @@ previous result instead of stacking.
 | `D px` | 1–300 | 150 | How far the shadow travels |
 | `Light %` | 1–100 | 100 | Scales every layer's opacity |
 | `Soft %` | 1–100 | 75 | Scales the blur of every step |
-| `Type` | Drop / Inner shadow | Drop | Which layer style to write (Advanced) |
+| `Type` | Drop / Inner shadow | Drop | Which layer style to write |
 | `Blend` | Photoshop blend list | Normal | Forwarded to the host when layer styles expose a blend parameter; the preview always shows it |
 | white card | click | `#f7f7f7` | Click it in the preview to pick the preview object's colour |
 | swatch | picker | black | Shadow colour (own HSV picker, verified against Photon) |
@@ -73,6 +73,12 @@ An Apply sends four operations: `documents.active` ×2, `effect.describe`, `laye
 MIT licensed — see [LICENSE](LICENSE).
 
 ## Changelog
+
+### 0.16.0
+
+- Removed the Drop Shadow card and its title; the values sit directly on the panel.
+- Type and Blend are now the first two rows, above the Angle/Distance/Light/Soft grid; Advanced is
+  gone. The hint about clicking the card stays below the fields.
 
 ### 0.15.4
 
