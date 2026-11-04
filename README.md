@@ -76,7 +76,7 @@ The panel draws its own preview on a canvas using the same maths as the document
 
 | Mode | What it builds | Pros | Cons |
 | --- | --- | --- | --- |
-| **Layer styles** (default) | One duplicate layer whose `fillOpacity` is 0, carrying **N `dropShadow` layer effects** (appended via `layer.effect.set` with increasing `index`) | Stays editable in Photon's **Layer Style** panel, one extra layer only, effects scale with the layer | Taper is not expressible as an effect |
+| **Layer styles** (default) | **N `dropShadow` layer styles added to the selected layer** (one `layer.effects.set` call, existing styles preserved) | Stays editable in Photon's **Layer Style** panel, one extra layer only, effects scale with the layer | Taper is not expressible as an effect |
 | **Layer copies** | N duplicated layers, each filled, blurred and faded | Full control incl. **taper** | More layers; rasterize on Apply to flatten |
 
 `layer.effect.set` documents `index` as "defaults to zero and may equal the current count to
@@ -130,6 +130,19 @@ from that. The shadow therefore lands directly behind the subject in either conv
   preview on screen leaves it behind — press **Remove preview** first.
 
 ## Changelog
+
+### 0.10.0
+
+- **Effects now go on the selected layer — no duplicate.** The shadow is written with one
+  `layer.effects.set` call that merges the layer's existing styles with the new `dropShadows`, so
+  your own effects survive and the whole change is a single undo step.
+- **Preview is revertible.** The plugin snapshots the layer styles before writing; **Remove preview**
+  writes the snapshot back (or clears the styles when the layer had none).
+- **Colour fixed.** The colour is now written into the `dropShadows` payload using the host's own
+  notation (bare `000000` when the default has no `#`, `#000000` when it does) instead of the strict
+  `layer.effect.set` path that silently kept the default black.
+- Mode copy and hints updated; copies mode still duplicates layers for taper.
+- Tests: 21.
 
 ### 0.9.1
 

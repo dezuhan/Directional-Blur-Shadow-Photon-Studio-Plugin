@@ -1,15 +1,21 @@
 /*
  * Directional Blur Shadow — Photon port of the Affinity Photo macro.
  *
- * Pipeline per step (farthest → nearest):
- *   layer.duplicate  →  pixels.fill (silhouette, preserve transparency)  →  filter.blur.gaussianBlur
- *   →  layer.update (opacity)  →  core.canvas.applyLayerTransform (taper)  →  layer.move (below source)
- * Then: layer.group → rename → optional layer.rasterize.
+ * Two build modes:
+ *   effects  — append N dropShadow layer styles to the SELECTED layer (no duplicate), via one
+ *              `layer.effects.set` call on a merged styles snapshot. Preview can be reverted by
+ *              writing the snapshot back.
+ *   copies   — duplicate the layer N times (fill → blur → opacity → move), group them, optionally
+ *              rasterize. Supports taper.
  *
- * Opacity follows the alpha-compositing (Beer–Lambert) law so the falloff does not depend on
- * the step count:  raw = 1 - (1 - target)^(1/steps),  opacity = min(1, raw * darkness).
+ * Ramps follow the "Beautiful Shadows" plugin: offset t², blur t^0.7, opacity (1 − t)² normalised so
+ * the nearest layer lands on startOpacity. Lighting deepens with 1 − (1 − raw)^darkness, which stays
+ * monotonic and never clips.
  *
- * Everything here is pure or takes the SDK as an injected `api`, so it is testable in Node.
+ * Photon's drop-shadow angle is the LIGHT direction, so the effect receives angle + 180 while the
+ * plan's dx/dy describe where the shadow itself falls.
+ *
+ * Pure maths and an injected `api` keep everything testable in Node.
  */
 (function (root, factory) {
   const mod = factory();
@@ -60,14 +66,8 @@
   /**
    * Per-layer plan, farthest first (index 0 = end of the shadow). Pure.
    *
-   * Ramps follow the "Beautiful Shadows" behaviour: the offset grows quadratically with the
-   * distance (2,6 / 10,24 / 22,55 / 39,97 / 61,152 for 5 layers), the blur eases with t^0.7 and
-   * the opacity falls off as (1 - t)^2 from startOpacity to endOpacity.
-   *
-   * opacityMode "direct"     → per-layer opacity is the ramp value (drop-shadow layer styles:
-   *                            each style renders independently, like the Figma plugin).
-   * opacityMode "composite"  → per-layer opacity is normalised for stacked copies
-   *                            (1 - (1 - target)^(1/steps)), see the Affinity port notes.
+   * opacityMode "direct"    → ramp value as-is (independent layer styles, like the Figma plugin).
+   * opacityMode "composite" → normalised for stacked copies (1 − (1 − target)^(1/steps)).
    */
   function planLayers(input, opacityMode) {
     const params = normalise(input);
@@ -82,22 +82,16 @@
 
     for (let step = params.steps; step >= 1; step -= 1) {
       const t = step / params.steps;
-      const easedDistance = t * t;
-      const easedBlur = Math.pow(t, 0.7);
-      // Normalise the ramp so the nearest layer lands exactly on startOpacity and the farthest on
-      // endOpacity: without this the (1 - t)^2 curve never reaches "start" (44 % became 29 %).
       const rampT = params.steps === 1 ? 0 : (t - 1 / params.steps) / (1 - 1 / params.steps);
       const target = clamp(end + (start - end) * Math.pow(1 - rampT, 2), 0, 1);
       const raw = direct ? target : 1 - Math.pow(1 - target, 1 / params.steps);
-      // Darkness > 100 % must not clip every layer to 1 (that turned 300 % into a directionless
-      // blob): 1 - (1 - raw)^k stays strictly increasing and asymptotic to 1.
       const shaded = darkness === 1 ? raw : 1 - Math.pow(1 - raw, darkness);
       layers.push({
         step,
         t,
-        dx: nx * params.distance * easedDistance,
-        dy: ny * params.distance * easedDistance,
-        blur: Math.max(0.1, params.blur * easedBlur),
+        dx: nx * params.distance * t * t,
+        dy: ny * params.distance * t * t,
+        blur: Math.max(0.1, params.blur * Math.pow(t, 0.7)),
         target,
         opacity: Math.min(1, shaded),
         perpScale: 1 + (params.taperEnd / 100 - 1) * t,
@@ -110,7 +104,6 @@
   function taperMatrix(angleRad, perpScale, pivotX, pivotY) {
     const cos = Math.cos(angleRad);
     const sin = Math.sin(angleRad);
-    // R(-θ) * S * R(θ)
     const a = cos * cos + perpScale * sin * sin;
     const b = sin * cos - perpScale * sin * cos;
     const c = b;
@@ -155,19 +148,19 @@
     return api.documents.execute(operation, params, documentId);
   }
 
+  /* ------------------------------------------------------------------ copies mode */
+
   /**
-   * Build the shadow. Returns { layerIds, groupId } — nothing is committed by the caller yet.
-   * `onStep(index, total)` lets the panel show progress.
+   * Duplicate the layer N times, turn each copy into a blurred silhouette and place it behind the
+   * source. Returns the created layer ids plus the group id.
    */
   async function buildShadow(api, options) {
     const documentId = options.documentId;
     const sourceLayerId = options.sourceLayerId;
     const plan = planLayers(options.params);
     const onStep = options.onStep || (() => {});
-    const doc = await api.documents.active();
     const layerIds = [];
 
-    // 1. First duplicate doubles as an orientation probe: does index 0 sit at the top or bottom?
     const probe = await execute(api, documentId, "layer.duplicate", { layerIds: [sourceLayerId] });
     const firstShadowId = firstId(probe);
     if (!firstShadowId) throw new Error("Photon did not return the duplicated layer id.");
@@ -176,7 +169,7 @@
     const afterProbe = await api.documents.active();
     const sourceIndex = (afterProbe.layers || []).findIndex((item) => item.id === sourceLayerId);
     const probeIndex = (afterProbe.layers || []).findIndex((item) => item.id === firstShadowId);
-    const topFirst = probeIndex < sourceIndex; // index 0 = topmost
+    const topFirst = probeIndex < sourceIndex;
     const base = topFirst ? sourceIndex + 1 : sourceIndex;
     const bounds = layerBounds(afterProbe, sourceLayerId);
     const pivotX = bounds.x + bounds.width / 2;
@@ -204,10 +197,7 @@
           matrix: taperMatrix(plan.direction.angleRad, entry.perpScale, pivotX, pivotY),
         });
       }
-      await execute(api, documentId, "layer.move", {
-        layerIds: [layerId],
-        placement: { index: base + slot },
-      });
+      await execute(api, documentId, "layer.move", { layerIds: [layerId], placement: { index: base + slot } });
       if (entry.dx || entry.dy) {
         await execute(api, documentId, "layer.translate", { layerIds: [layerId], dx: entry.dx, dy: entry.dy });
       }
@@ -226,7 +216,6 @@
       onStep(index + 1, plan.params.steps);
     }
 
-    // 2. Group, name, and optionally rasterize.
     let groupId = null;
     if (layerIds.length) {
       const grouped = await execute(api, documentId, "layer.group", { layerIds });
@@ -240,7 +229,7 @@
       }
     }
 
-    return { layerIds, groupId, topFirst, base, plan };
+    return { layerIds, groupId, mode: "copies", topFirst, base, plan };
   }
 
   async function removeShadow(api, documentId, layerIds, groupId) {
@@ -253,12 +242,24 @@
     }
   }
 
-
-  /* ------------------------------------------------------------------ layer styles */
+  /* ------------------------------------------------------------------ effect description */
 
   const WRAPPER_KEYS = new Set([
-    "params", "parameters", "properties", "values", "defaults", "descriptor", "descriptors",
-    "kind", "kinds", "effect", "effects", "meta", "version", "schema", "inputSchema",
+    "params",
+    "parameters",
+    "properties",
+    "values",
+    "defaults",
+    "descriptor",
+    "descriptors",
+    "kind",
+    "kinds",
+    "effect",
+    "effects",
+    "meta",
+    "version",
+    "schema",
+    "inputSchema",
   ]);
 
   function looksLikeDescriptor(node) {
@@ -270,11 +271,9 @@
   }
 
   /**
-   * Normalise effect.describe(kind:"dropShadow") into a map of parameter name -> metadata.
-   *
-   * The exact wrapper is not part of the public contract, so this walks the whole payload:
-   * it accepts descriptor arrays ([{name, default, type}]), nested objects ({params: {...}}),
-   * and flat name -> value maps. Anything it cannot classify is ignored.
+   * Normalise effect.describe(kind:"dropShadow") into name → metadata. The wrapper is not part of the
+   * public contract, so the whole payload is walked: descriptor arrays, nested wrappers and flat
+   * name → value maps all work.
    */
   function describeToMap(described) {
     const map = new Map();
@@ -356,24 +355,22 @@
   }
 
   /**
-   * Build a dropShadow payload that the host will accept.
+   * Build a dropShadow payload the host accepts.
    *
-   * The registry validates this payload strictly ("Invalid dropShadow parameters; inspect
-   * effect.describe"), so this function:
-   *   - only sends keys that `effect.describe` actually lists;
-   *   - infers units from the host's own defaults: an opacity default of 75 means percent,
-   *     0.75 means a fraction; a string colour default means hex, an object means rgb;
-   *   - refuses to guess when the description is missing, instead of sending invalid params.
+   * `layer.effect.set` validates strictly ("Invalid dropShadow parameters"), so only parameter names
+   * that `effect.describe` lists are sent, units are inferred from the host's own defaults, and
+   * Photon's light-angle convention is applied (shadow angle + 180).
    */
   function effectParams(described, entry, params) {
     const { map } = effectDefaults(described);
     const distance = entry.distance !== undefined ? entry.distance : Math.hypot(entry.dx || 0, entry.dy || 0);
     const blur = Math.max(0.1, entry.blur);
     const wantOpacity = Math.max(0, Math.min(1, entry.opacity));
+    const lightAngle = (params.angle + 180) % 360;
 
     if (map.size === 0) {
       const error = new Error(
-        "dropShadow parameters are unknown: effect.describe returned nothing. Open Diagnostics → Inspect effect parameters and check the log.",
+        "dropShadow parameters are unknown: effect.describe returned nothing. Open Advanced → Inspect effect parameters and check the log.",
       );
       error.code = "EFFECT_DESCRIBE_MISSING";
       throw error;
@@ -381,14 +378,8 @@
 
     const out = {};
     const find = (patterns) => pickParam(map, patterns);
-    const setNumber = (name, value) => {
-      if (name) out[name] = value;
-    };
-
     const angleRad = (params.angle * Math.PI) / 180;
-    // Photon's drop-shadow angle is the LIGHT direction (like Photoshop's "Use Global Light"):
-    // the shadow falls on the opposite side, so the effect receives angle + 180.
-    const lightAngle = (params.angle + 180) % 360;
+
     const angleName = find([/angle/, /direction/, /rotation/]);
     const distanceName = find([/distance/, /offset(?!x|y)/, /radius$/]);
     const xName = find([/^(x|posx|positionx|offsetx)$/]);
@@ -400,14 +391,14 @@
     const spreadName = find([/spread/]);
     const globalName = find([/use.*global/]);
 
-    // Positional hosts (x / y like the Figma plugin) get the Cartesian projection directly.
+    // positional hosts receive the shadow offset directly
     if (xName || yName) {
-      setNumber(xName, Math.cos(angleRad) * distance);
-      setNumber(yName, Math.sin(angleRad) * distance);
+      if (xName) out[xName] = Math.cos(angleRad) * distance;
+      if (yName) out[yName] = Math.sin(angleRad) * distance;
     }
-    setNumber(distanceName, distance);
-    setNumber(angleName, lightAngle);
-    setNumber(sizeName, blur);
+    if (distanceName) out[distanceName] = distance;
+    if (angleName) out[angleName] = lightAngle;
+    if (sizeName) out[sizeName] = blur;
     if (spreadName) out[spreadName] = 0;
     if (globalName) out[globalName] = false;
 
@@ -419,7 +410,12 @@
     if (colourName) {
       const meta = map.get(colourName.toLowerCase());
       const defaultValue = meta && meta.value;
-      out[colourName] = typeof defaultValue === "string" ? String(params.colour).toUpperCase() : rgba(params.colour);
+      if (typeof defaultValue === "string") {
+        const hex = String(params.colour).replace("#", "").toUpperCase();
+        out[colourName] = defaultValue.startsWith("#") ? "#" + hex : hex;
+      } else {
+        out[colourName] = rgba(params.colour);
+      }
     }
     if (blendName) {
       const meta = map.get(blendName.toLowerCase());
@@ -428,8 +424,7 @@
 
     if (!Object.keys(out).length) {
       const error = new Error(
-        "None of the dropShadow parameters could be mapped. Discovered parameters: " +
-          [...map.keys()].join(", "),
+        "None of the dropShadow parameters could be mapped. Discovered parameters: " + [...map.keys()].join(", "),
       );
       error.code = "EFFECT_MAPPING_EMPTY";
       error.discovered = [...map.keys()];
@@ -438,79 +433,88 @@
     return out;
   }
 
+  /* ------------------------------------------------------------------ effects mode */
+
+  /** Documented shape of a layer-styles object (see layer.effects.set). */
+  function emptyStyles() {
+    return {
+      enabled: true,
+      scale: 1,
+      strokes: [],
+      innerShadows: [],
+      colorOverlays: [],
+      gradientOverlays: [],
+      patternOverlays: [],
+      dropShadows: [],
+    };
+  }
+
+  /** Read a layer's current styles if the document model exposes them. */
+  function stylesFromLayer(layer) {
+    if (!layer) return null;
+    const source = layer.styles || layer.effects || layer.layerEffects || layer.layerStyle || null;
+    if (!source || typeof source !== "object") return null;
+    if (!Array.isArray(source.dropShadows) && !Array.isArray(source.strokes)) return null;
+    return { ...emptyStyles(), ...source, dropShadows: [...(source.dropShadows || [])] };
+  }
+
   /**
-   * Effects mode: one duplicate layer whose interior is hidden (fillOpacity 0) carrying N
-   * dropShadow layer styles. Photon lets `layer.effect.set` append by passing index === count,
-   * so several shadows of the same kind can coexist and stay editable in the Layer Style panel.
+   * Effects mode: append N dropShadow styles to the SELECTED layer — no duplicate.
+   *
+   * `layer.effects.set` replaces the whole styles object, so the current styles are read first and
+   * merged: the user's own effects survive, and the snapshot lets `restoreLayerStyles` undo a
+   * preview.
    */
-  async function buildWithEffects(api, options) {
+  async function applyLayerStyles(api, options) {
     const documentId = options.documentId;
-    const sourceLayerId = options.sourceLayerId;
+    const layerId = options.layerId;
     const plan = planLayers(options.params, "direct");
     const onStep = options.onStep || (() => {});
     const doc = await api.documents.active();
+    const layer = (doc.layers || []).find((item) => item.id === layerId);
+    const stylesBefore = stylesFromLayer(layer);
 
     let described = null;
     try {
       described = await execute(api, documentId, "effect.describe", { kind: "dropShadow" });
     } catch {
-      described = null; // fall back to the documented Photoshop-style names
+      described = null;
     }
-
-    const duplicated = await execute(api, documentId, "layer.duplicate", { layerIds: [sourceLayerId] });
-    const layerId = firstId(duplicated);
-    if (!layerId) throw new Error("Photon did not return the duplicated layer id.");
-
-    // The duplicate inherits the source layer's layer styles. Clear them first, otherwise the
-    // inherited drop shadows stay at their own (often 100%) opacity and stack on top of ours —
-    // that is what made a few shadows look fully opaque.
-    try {
-      await execute(api, documentId, "layer.effects.clear", { layerIds: [layerId] });
-    } catch {
-      /* the op may be unavailable; the shadow still builds */
-    }
-
-    // Hide the copy's own pixels: only its effects should be visible.
-    await execute(api, documentId, "layer.update", {
-      layerId,
-      properties: { name: GROUP_NAME, fillOpacity: 0 },
-    });
 
     const payloads = plan.layers.map((entry) =>
-      effectParams(described, { distance: Math.hypot(entry.dx, entry.dy), blur: entry.blur, opacity: entry.opacity }, plan.params),
+      effectParams(
+        described,
+        { distance: Math.hypot(entry.dx, entry.dy), blur: entry.blur, opacity: entry.opacity },
+        plan.params,
+      ),
     );
 
-    // Append one drop shadow per step. If the host rejects a payload, surface the exact payload so
-    // Diagnostics can show what it did not like instead of repeating the error N times.
-    for (let index = 0; index < payloads.length; index += 1) {
-      try {
-        await execute(api, documentId, "layer.effect.set", {
-          layerIds: [layerId],
-          kind: "dropShadow",
-          index,
-          params: payloads[index],
-        });
-      } catch (error) {
-        const wrapped = new Error(String((error && error.message) || error));
-        wrapped.code = "EFFECT_REJECTED";
-        wrapped.payload = { index, params: payloads[index] };
-        throw wrapped;
-      }
-      onStep(index + 1, payloads.length);
-    }
+    const base = stylesBefore || emptyStyles();
+    const styles = { ...base, dropShadows: [...(base.dropShadows || []), ...payloads] };
+    await execute(api, documentId, "layer.effects.set", { layerIds: [layerId], styles });
+    onStep(payloads.length, payloads.length);
 
-    const after = await api.documents.active();
-    const sourceIndex = (after.layers || []).findIndex((item) => item.id === sourceLayerId);
-    const copyIndex = (after.layers || []).findIndex((item) => item.id === layerId);
-    const topFirst = copyIndex < sourceIndex;
     return {
       layerIds: [layerId],
-      groupId: layerId,
+      groupId: null,
       mode: "effects",
       effects: payloads.length,
-      topFirst,
+      stylesBefore,
       plan,
     };
+  }
+
+  /** Undo an effects-mode preview by writing the snapshot back. */
+  async function restoreLayerStyles(api, documentId, layerId, stylesBefore) {
+    try {
+      if (stylesBefore) {
+        await execute(api, documentId, "layer.effects.set", { layerIds: [layerId], styles: stylesBefore });
+      } else {
+        await execute(api, documentId, "layer.effects.clear", { layerIds: [layerId] });
+      }
+    } catch {
+      /* document closed or layer gone */
+    }
   }
 
   return {
@@ -523,10 +527,13 @@
     rgba,
     firstId,
     buildShadow,
-    buildWithEffects,
+    applyLayerStyles,
+    restoreLayerStyles,
     removeShadow,
     describeToMap,
     effectParams,
     vectorToAngleDistance,
+    emptyStyles,
+    stylesFromLayer,
   };
 });

@@ -97,9 +97,10 @@ function setBusy(value) {
 
 async function buildFor(doc, layerId, params, mode) {
   if (mode === "effects") {
-    return Shadow.buildWithEffects(api, {
+    // applies to the SELECTED layer, no duplicate; the styles snapshot makes it revertible
+    return Shadow.applyLayerStyles(api, {
       documentId: doc.id,
-      sourceLayerId: layerId,
+      layerId,
       params,
       onStep: (done, total) => setStatus("shadow " + done + " / " + total),
     });
@@ -128,11 +129,16 @@ async function markPreview() {
 
 async function dropPreview() {
   if (!preview) return;
-  const id = preview.groupId;
-  const ids = preview.layerIds || [];
+  const current = preview;
   try {
     const doc = await api.documents.active();
-    if (doc) await Shadow.removeShadow(api, doc.id, ids, id);
+    if (doc) {
+      if (current.mode === "effects") {
+        await Shadow.restoreLayerStyles(api, doc.id, current.layerIds[0], current.stylesBefore);
+      } else {
+        await Shadow.removeShadow(api, doc.id, current.layerIds, current.groupId);
+      }
+    }
   } catch {
     /* document closed; nothing to clean */
   }
@@ -159,7 +165,7 @@ async function runPreview() {
     badge("Preview", "busy");
     setStatus(
       mode === "effects"
-        ? "preview ready — " + preview.effects + " drop shadows on one layer"
+        ? "preview ready — " + preview.effects + " drop shadows on the selected layer"
         : "preview ready — Apply to keep it",
     );
     await markPreview();
@@ -413,8 +419,8 @@ function wire() {
     el.taper.disabled = false;
     el.taperEnd.disabled = effects || !el.taper.checked;
     el.modeHint.textContent = effects
-      ? "One layer with N drop shadows: editable in the Layer Style panel, no taper."
-      : "N duplicated layers: supports taper, rasterize optional.";
+      ? "Effects go on the selected layer: editable, no duplicate, no taper."
+      : "N duplicated layers behind the subject: supports taper, rasterize optional.";
     setStatus(effects ? "effects mode" : "copies mode");
   });
   const canvas = el.previewCanvas;

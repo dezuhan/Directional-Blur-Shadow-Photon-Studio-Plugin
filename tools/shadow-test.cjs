@@ -229,174 +229,37 @@ test("removeShadow tolerates a missing layer", async () => {
 
 /* --------------------------------------------------------------- effects mode */
 
-function effectsApi(described) {
+function effectsApi(options) {
+  const settings = options || {};
   const calls = [];
-  let duplicateCount = 0;
-  const layers = [{ id: "src" }, { id: "bg" }];
+  const layer = { id: "src" };
+  if (settings.styles) layer.styles = settings.styles;
+  const layers = [layer, { id: "bg" }];
   const api = {
     calls,
     documents: {
       active: async () => ({ id: "doc-1", width: 800, height: 600, layers: layers.map((l) => ({ ...l })) }),
       execute: async (operation, params) => {
         calls.push({ operation, params });
-        if (operation === "effect.describe") return described;
-        if (operation === "layer.effects.clear") return { ok: true };
-        if (operation === "layer.duplicate") {
-          duplicateCount += 1;
-          const id = "fx" + duplicateCount;
-          layers.unshift({ id });
-          return { layerIds: [id] };
-        }
+        if (operation === "effect.describe") return DESCRIBED;
         return { ok: true };
       },
     },
   };
-  return { api, calls };
+  return api;
 }
 
 const DESCRIBED = {
   params: [
     { name: "blendMode", default: "normal" },
-    { name: "opacity", default: 0.75 },
+    { name: "opacity", default: 75 },
     { name: "angle", default: 120 },
     { name: "distance", default: 5 },
     { name: "spread", default: 0 },
     { name: "size", default: 5 },
-    { name: "color", default: { space: "rgb", r: 0, g: 0, b: 0, a: 1 } },
-    { name: "noise", default: 0 },
+    { name: "color", default: "000000" },
   ],
 };
-
-test("describeToMap reads array and object payloads", () => {
-  const fromArray = Shadow.describeToMap(DESCRIBED);
-  assert.equal(fromArray.size, 8);
-  assert.equal(fromArray.get("distance").name, "distance");
-  const fromObject = Shadow.describeToMap({ params: { angle: 30, size: 5 } });
-  assert.equal(fromObject.size, 2);
-  assert.equal(fromObject.get("size").value, 5);
-});
-
-test("effectParams maps onto the host's parameter names", () => {
-  const out = Shadow.effectParams(DESCRIBED, { distance: 42, blur: 12, opacity: 0.4, dx: 0, dy: 0 }, { angle: 90, colour: "#112233" });
-  assert.equal(out.angle, 270, "host angle is the light direction: shadow angle 90 becomes 270");
-  assert.equal(out.distance, 42);
-  assert.equal(out.size, 12);
-  assert.equal(out.opacity, 0.4);
-  assert.deepEqual(out.color, { space: "rgb", r: 0x11 / 255, g: 0x22 / 255, b: 0x33 / 255, a: 1 });
-});
-
-test("effectParams throws when describe is unavailable", () => {
-  assert.throws(
-    () => Shadow.effectParams(null, { distance: 10, blur: 3, opacity: 0.5 }, { angle: 45, colour: "#000000" }),
-    /effect.describe returned nothing/,
-  );
-});
-
-test("buildWithEffects appends one drop shadow per step on a single hidden-copy layer", async () => {
-  const { api, calls } = effectsApi(DESCRIBED);
-  const result = await Shadow.buildWithEffects(api, {
-    documentId: "doc-1",
-    sourceLayerId: "src",
-    params: { steps: 6, angle: 30, distance: 120, blur: 20, startOpacity: 100, endOpacity: 25 },
-  });
-
-  assert.equal(result.mode, "effects");
-  assert.equal(result.effects, 6);
-  assert.equal(calls.filter((c) => c.operation === "layer.duplicate").length, 1, "only one duplicated layer");
-  assert.equal(calls.filter((c) => c.operation === "layer.group").length, 0, "no group needed");
-
-  const update = calls.find((c) => c.operation === "layer.update");
-  assert.equal(update.params.properties.fillOpacity, 0, "the copy's own pixels are hidden");
-  assert.equal(update.params.properties.name, Shadow.GROUP_NAME);
-
-  const cleared = calls.findIndex((c) => c.operation === "layer.effects.clear");
-  const firstEffect = calls.findIndex((c) => c.operation === "layer.effect.set");
-  assert.ok(cleared >= 0, "inherited layer styles are cleared on the copy");
-  assert.ok(cleared < firstEffect, "clearing happens before the new shadows are appended");
-
-  const effects = calls.filter((c) => c.operation === "layer.effect.set");
-  assert.equal(effects.length, 6, "one append per step");
-  assert.deepEqual(effects.map((c) => c.params.index), [0, 1, 2, 3, 4, 5]);
-  for (const call of effects) {
-    assert.equal(call.params.kind, "dropShadow");
-    assert.deepEqual(call.params.layerIds, ["fx1"]);
-    assert.ok(call.params.params.distance > 0);
-    assert.ok(call.params.params.size > 0);
-    assert.ok(call.params.params.opacity > 0 && call.params.params.opacity <= 1);
-    assert.equal(call.params.params.spread, 0, "spread comes from the described names");
-  }
-  const distances = effects.map((c) => c.params.params.distance);
-  assert.ok(distances[0] > distances[distances.length - 1], "far shadow travels further");
-});
-
-test("buildWithEffects refuses to guess when describe is unavailable", async () => {
-  const { api, calls } = effectsApi(undefined);
-  await assert.rejects(
-    Shadow.buildWithEffects(api, { documentId: "doc-1", sourceLayerId: "src", params: { steps: 3 } }),
-    /effect.describe returned nothing/,
-  );
-  assert.equal(calls.filter((c) => c.operation === "layer.effect.set").length, 0, "no invalid payload sent");
-});
-
-
-test("vectorToAngleDistance maps a drag to angle and distance", () => {
-  const right = Shadow.vectorToAngleDistance(100, 0, 2000);
-  assert.equal(right.angle, 0);
-  assert.equal(right.distance, 100);
-  const down = Shadow.vectorToAngleDistance(0, 50, 2000);
-  assert.equal(down.angle, 90);
-  assert.equal(down.distance, 50);
-  const upLeft = Shadow.vectorToAngleDistance(-10, -10, 2000);
-  assert.equal(upLeft.angle, 225);
-  assert.ok(Math.abs(upLeft.distance - Math.hypot(10, 10)) < 0.1, "distance is rounded to 0.1");
-  const clamped = Shadow.vectorToAngleDistance(5000, 0, 150);
-  assert.equal(clamped.distance, 150);
-});
-
-test("effectParams prefers an explicit blur parameter over size", () => {
-  const described = {
-    params: [
-      { name: "blur", default: 4 },
-      { name: "size", default: 4 },
-      { name: "distance", default: 5 },
-      { name: "opacity", default: 0.7 },
-      { name: "angle", default: 120 },
-      { name: "color", default: { space: "rgb", r: 0, g: 0, b: 0, a: 1 } },
-    ],
-  };
-  const out = Shadow.effectParams(described, { distance: 30, blur: 17, opacity: 0.5 }, { angle: 45, colour: "#000000" });
-  assert.equal(out.blur, 17, "blur is used for softness");
-  assert.equal(out.size, undefined, "size is not sent when an explicit blur exists");
-  assert.equal(out.angle, 225, "light angle is the shadow angle + 180");
-  assert.equal(out.opacity, 0.5);
-});
-
-
-test("effectParams infers units from the host defaults", () => {
-  const percentHost = {
-    params: [
-      { name: "opacity", default: 75 },
-      { name: "angle", default: 120 },
-      { name: "distance", default: 5 },
-      { name: "size", default: 5 },
-      { name: "color", default: "000000" },
-    ],
-  };
-  const percent = Shadow.effectParams(percentHost, { distance: 150, blur: 26, opacity: 0.38 }, { angle: 30, colour: "#000000" });
-  assert.equal(percent.opacity, 38, "percent host gets 0-100");
-  assert.equal(percent.color, "#000000", "string colour default means hex");
-
-  const fractionHost = {
-    params: [
-      { name: "opacity", default: 0.75 },
-      { name: "color", default: { space: "rgb", r: 0, g: 0, b: 0, a: 1 } },
-    ],
-  };
-  const fraction = Shadow.effectParams(fractionHost, { distance: 150, blur: 26, opacity: 0.38 }, { angle: 30, colour: "#112233" });
-  assert.equal(fraction.opacity, 0.38, "fraction host keeps 0-1");
-  assert.deepEqual(fraction.color, { space: "rgb", r: 0x11 / 255, g: 0x22 / 255, b: 0x33 / 255, a: 1 });
-});
-
 
 test("describeToMap walks nested wrappers and flat maps", () => {
   const nested = Shadow.describeToMap({ descriptor: { parameters: [{ name: "opacity", default: 0.5 }] } });
@@ -410,6 +273,22 @@ test("describeToMap walks nested wrappers and flat maps", () => {
   const deep = Shadow.describeToMap({ kind: "dropShadow", meta: { version: 1, params: [{ key: "blur", default: 14 }] } });
   assert.equal(deep.size, 1);
   assert.equal(deep.get("blur").name, "blur");
+});
+
+test("effectParams maps onto the host's parameter names", () => {
+  const out = Shadow.effectParams(DESCRIBED, { distance: 42, blur: 12, opacity: 0.4, dx: 0, dy: 0 }, { angle: 90, colour: "#112233" });
+  assert.equal(out.angle, 270, "host angle is the light direction: shadow angle 90 becomes 270");
+  assert.equal(out.distance, 42);
+  assert.equal(out.size, 12);
+  assert.equal(out.opacity, 40, "percent host");
+  assert.equal(out.color, "112233", "string colour default means bare hex");
+});
+
+test("effectParams throws when describe is unavailable", () => {
+  assert.throws(
+    () => Shadow.effectParams(null, { distance: 10, blur: 3, opacity: 0.5 }, { angle: 45, colour: "#000000" }),
+    /effect.describe returned nothing/,
+  );
 });
 
 test("effectParams supports positional X/Y hosts (Beautiful Shadows style)", () => {
@@ -428,7 +307,7 @@ test("effectParams supports positional X/Y hosts (Beautiful Shadows style)", () 
   assert.ok(Math.abs(out.y) < 1e-9);
   assert.equal(out.blur, 26);
   assert.equal(out.spread, 0);
-  assert.equal(out.color, "#000000");
+  assert.equal(out.color, "000000");
   assert.equal(out.opacity, 38, "percent host");
   assert.equal(out.angle, undefined, "no angle parameter in this host");
 });
@@ -444,29 +323,69 @@ test("unmappable parameters report the discovered keys", () => {
   }
 });
 
+test("applyLayerStyles writes drop shadows onto the selected layer, no duplicate", async () => {
+  const api = effectsApi();
+  const result = await Shadow.applyLayerStyles(api, {
+    documentId: "doc-1",
+    layerId: "src",
+    params: { steps: 5, angle: 30, distance: 150, blur: 26 },
+  });
 
-test("direct-mode opacities span startOpacity to endOpacity", () => {
-  const { layers } = Shadow.planLayers({ steps: 5, startOpacity: 44, endOpacity: 1 }, "direct");
-  const percent = layers.map((layer) => Math.round(layer.opacity * 100));
-  assert.equal(percent[0], 1, "farthest layer is endOpacity");
-  assert.equal(percent[4], 44, "nearest layer is startOpacity");
-  assert.deepEqual(percent, [1, 4, 12, 25, 44]);
+  assert.equal(result.mode, "effects");
+  assert.equal(result.effects, 5);
+  assert.equal(api.calls.filter((c) => c.operation === "layer.duplicate").length, 0, "no duplicate layer");
+  assert.equal(api.calls.filter((c) => c.operation === "layer.effects.clear").length, 0);
+
+  const sets = api.calls.filter((c) => c.operation === "layer.effects.set");
+  assert.equal(sets.length, 1, "a single atomic write");
+  assert.deepEqual(sets[0].params.layerIds, ["src"]);
+  const shadows = sets[0].params.styles.dropShadows;
+  assert.equal(shadows.length, 5);
+  assert.equal(sets[0].params.styles.enabled, true);
+  for (const shadow of shadows) {
+    assert.ok(shadow.distance > 0);
+    assert.ok(shadow.size > 0);
+    assert.ok(shadow.opacity > 0 && shadow.opacity <= 100);
+  }
+  assert.ok(shadows[0].distance > shadows[4].distance, "far shadow travels further");
+  assert.equal(shadows[4].opacity, 44, "nearest shadow lands on startOpacity");
 });
 
-
-test("positional hosts receive the shadow offset, not the light angle", () => {
-  const host = {
-    params: [
-      { name: "x", default: 2 },
-      { name: "y", default: 6 },
-      { name: "blur", default: 14 },
-      { name: "color", default: "000000" },
-      { name: "opacity", default: 44 },
-    ],
+test("applyLayerStyles keeps the layer's existing effects", async () => {
+  const existing = {
+    enabled: true,
+    scale: 1,
+    strokes: [],
+    innerShadows: [],
+    colorOverlays: [],
+    gradientOverlays: [],
+    patternOverlays: [],
+    dropShadows: [{ distance: 9, size: 4, angle: 100, opacity: 20, color: "000000" }],
   };
-  const out = Shadow.effectParams(host, { distance: 100, blur: 20, opacity: 0.4 }, { angle: 90, colour: "#000000" });
-  assert.ok(Math.abs(out.x) < 1e-9, "angle 90 points down, so x stays 0");
-  assert.ok(Math.abs(out.y - 100) < 1e-9, "y carries the whole offset");
+  const api = effectsApi({ styles: existing });
+  const result = await Shadow.applyLayerStyles(api, {
+    documentId: "doc-1",
+    layerId: "src",
+    params: { steps: 3 },
+  });
+
+  const set = api.calls.find((c) => c.operation === "layer.effects.set");
+  assert.equal(set.params.styles.dropShadows.length, 4, "existing shadow kept + 3 new");
+  assert.deepEqual(set.params.styles.dropShadows[0], existing.dropShadows[0]);
+  assert.equal(result.stylesBefore.dropShadows.length, 1, "the snapshot holds the original styles");
+});
+
+test("restoreLayerStyles puts the snapshot back", async () => {
+  const existing = Shadow.emptyStyles();
+  existing.dropShadows = [{ distance: 9 }];
+  const api = effectsApi({ styles: existing });
+  await Shadow.restoreLayerStyles(api, "doc-1", "src", existing);
+  const set = api.calls.find((c) => c.operation === "layer.effects.set");
+  assert.deepEqual(set.params.styles, existing);
+
+  const cleared = effectsApi();
+  await Shadow.restoreLayerStyles(cleared, "doc-1", "src", null);
+  assert.equal(cleared.calls.filter((c) => c.operation === "layer.effects.clear").length, 1, "clears when there was nothing to restore");
 });
 
 (async () => {

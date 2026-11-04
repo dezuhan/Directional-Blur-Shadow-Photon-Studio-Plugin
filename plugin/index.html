@@ -59,10 +59,10 @@
         <div class="field">
           <label class="label" for="mode">Mode</label>
           <select id="mode" class="input">
-            <option value="effects" selected>Layer styles — 1 layer, N drop shadows</option>
+            <option value="effects" selected>Layer styles — adds N drop shadows to the selected layer</option>
             <option value="copies">Layer copies — N layers, supports taper</option>
           </select>
-          <p id="modeHint" class="hint">One layer with N drop shadows, editable in the Layer Style panel.</p>
+          <p id="modeHint" class="hint">Effects go on the selected layer and stay editable in the Layer Style panel.</p>
         </div>
 
         <div class="row">
@@ -103,7 +103,7 @@
       </details>
 
       <p id="hint" class="hint">
-        Drag the light to aim the shadow. Nothing is written to the document until Preview or Apply.
+        Drag the light to aim the shadow. Preview writes the effects to the selected layer and can be undone with Remove preview.
       </p>
 
       <footer class="panel-footer">
