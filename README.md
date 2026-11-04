@@ -1,3 +1,5 @@
+![Directional Shadow applied in Photon Studio](docs/photon.png)
+
 # Directional Shadow — Photon Studio plugin
 
 Soft directional shadow for any layer, modelled on the Figma plugin **Beautiful Shadows** and the
