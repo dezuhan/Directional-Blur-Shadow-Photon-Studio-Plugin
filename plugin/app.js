@@ -268,6 +268,15 @@ function drawPreview() {
   const canvas = el.previewCanvas;
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
+  // Keep the backing store in sync with the CSS box so the wide stage does not stretch the preview.
+  const box = canvas.getBoundingClientRect();
+  const ratio = Math.min(2, window.devicePixelRatio || 1);
+  const nextWidth = Math.max(1, Math.round(box.width * ratio));
+  const nextHeight = Math.max(1, Math.round(box.height * ratio));
+  if (canvas.width !== nextWidth || canvas.height !== nextHeight) {
+    canvas.width = nextWidth;
+    canvas.height = nextHeight;
+  }
   const params = readParams();
   const plan = Shadow.planLayers(params);
   const isInner = plan.params.kind === "innerShadow";
@@ -686,6 +695,7 @@ function wire() {
   el.serviceBtn.addEventListener("click", () => void checkService());
   el.detailsClose.addEventListener("click", () => (el.detailsOverlay.hidden = true));
   el.copyLog.addEventListener("click", () => void copyAllLogs());
+  window.addEventListener("resize", scheduleDraw);
   el.detailsOverlay.addEventListener("click", (event) => {
     if (event.target === el.detailsOverlay) el.detailsOverlay.hidden = true;
   });

@@ -75,6 +75,12 @@ MIT licensed — see [LICENSE](LICENSE).
 
 ## Changelog
 
+### 0.18.2
+
+- The preview stage is now full width with a 340 px height cap; when the height limit is reached
+  the extra space goes to the width instead of growing the box taller. The canvas backing store
+  follows the CSS box so the preview is not stretched.
+
 ### 0.18.1
 
 - Removed the long hint under the preview. Details now has a **copy all logs** icon.

@@ -110,7 +110,8 @@ input:focus-visible {
 .stage {
   display: flex;
   width: 100%;
-  max-width: 340px;
+  max-width: none;
+  height: 340px;
   margin: 0 auto;
   padding: 6px;
   border-radius: var(--sh-radius);
@@ -121,8 +122,7 @@ input:focus-visible {
 #previewCanvas {
   display: block;
   width: 100%;
-  height: auto;
-  aspect-ratio: 1 / 1;
+  height: 100%;
   border-radius: 5px;
   cursor: grab;
   touch-action: none;
