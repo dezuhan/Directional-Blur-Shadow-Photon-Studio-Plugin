@@ -75,6 +75,11 @@ MIT licensed — see [LICENSE](LICENSE).
 
 ## Changelog
 
+### 0.17.2
+
+- The sun handle can be dragged even when it sits on top of the white preview box; the box
+  colour picker only opens when the click is not on the handle.
+
 ### 0.17.1
 
 - Footer follows the shared plugin pattern: version on the left, **Details** and **Check service**

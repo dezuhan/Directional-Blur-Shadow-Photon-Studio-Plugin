@@ -180,6 +180,20 @@ function previewBlend(name) {
   return PREVIEW_BLEND[name] || "source-over";
 }
 
+function lightHandle(params) {
+  const centre = canvasCentre();
+  const lightRad = ((params.angle + 180) * Math.PI) / 180;
+  const cos = Math.cos(lightRad);
+  const sin = Math.sin(lightRad);
+  const edgeMargin = 18;
+  const canvas = el.previewCanvas;
+  const tx = cos > 0 ? (canvas.width - edgeMargin - centre.x) / cos : cos < 0 ? (edgeMargin - centre.x) / cos : Infinity;
+  const ty = sin > 0 ? (canvas.height - edgeMargin - centre.y) / sin : sin < 0 ? (edgeMargin - centre.y) / sin : Infinity;
+  const reachLimit = Math.max(0, Math.min(tx, ty));
+  const reach = Math.min(Math.max(26, params.distance * SCALE), reachLimit);
+  return { x: centre.x + cos * reach, y: centre.y + sin * reach, reach };
+}
+
 function canvasCentre() {
   return { x: el.previewCanvas.width / 2, y: el.previewCanvas.height / 2 };
 }
@@ -284,20 +298,11 @@ function drawPreview() {
   }
 
   // light handle: the sun sits opposite the shadow. Distance 300 px maps to 126 canvas px
-  // (SCALE 0.42); the old 74 px cap stopped the handle early, so let it travel until the sun
-  // (plus rays) reaches the canvas edge instead.
+  // (SCALE 0.42) and stops only when the sun plus rays reaches the canvas edge.
+  const handle = lightHandle(params);
   const lightRad = ((params.angle + 180) * Math.PI) / 180;
-  const edgeMargin = 18;
-  const reachLimit = (() => {
-    const cos = Math.cos(lightRad);
-    const sin = Math.sin(lightRad);
-    const tx = cos > 0 ? (canvas.width - edgeMargin - centre.x) / cos : cos < 0 ? (edgeMargin - centre.x) / cos : Infinity;
-    const ty = sin > 0 ? (canvas.height - edgeMargin - centre.y) / sin : sin < 0 ? (edgeMargin - centre.y) / sin : Infinity;
-    return Math.max(0, Math.min(tx, ty));
-  })();
-  const reach = Math.min(Math.max(26, params.distance * SCALE), reachLimit);
-  const hx = centre.x + Math.cos(lightRad) * reach;
-  const hy = centre.y + Math.sin(lightRad) * reach;
+  const hx = handle.x;
+  const hy = handle.y;
 
   ctx.save();
   ctx.strokeStyle = "#2b6cf6";
@@ -580,7 +585,9 @@ function wire() {
   if (canvas) {
     canvas.addEventListener("pointerdown", (event) => {
       const point = canvasPoint(event);
-      if (insideCard(point)) {
+      const handle = lightHandle(readParams());
+      const nearSun = Math.hypot(point.x - handle.x, point.y - handle.y) <= 20;
+      if (!nearSun && insideCard(point)) {
         openPicker("card");
         return;
       }
