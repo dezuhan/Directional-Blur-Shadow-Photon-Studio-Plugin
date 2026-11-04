@@ -44,61 +44,63 @@
           </label>
         </div>
 
-        <details class="advanced">
-          <summary>Advanced</summary>
-          <div class="adv-stack">
-            <div class="mini">
-              <span>Type</span>
-              <span class="select">
-                <select id="kind" aria-label="Shadow type">
-                  <option value="dropShadow" selected>Drop shadow</option>
-                  <option value="innerShadow">Inner shadow</option>
-                </select>
-                <span class="chevron" aria-hidden="true"></span>
-              </span>
-            </div>
-            <div class="mini">
-              <span>Blend</span>
-              <span class="select">
-                <select id="blend" aria-label="Shadow blend mode">
-                    <option value="normal" selected>Normal</option>
-                    <option value="dissolve">Dissolve</option>
-                    <option value="darken">Darken</option>
-                    <option value="multiply">Multiply</option>
-                    <option value="color-burn">Color Burn</option>
-                    <option value="linear-burn">Linear Burn</option>
-                    <option value="darker-color">Darker Color</option>
-                    <option value="lighten">Lighten</option>
-                    <option value="screen">Screen</option>
-                    <option value="color-dodge">Color Dodge</option>
-                    <option value="linear-dodge">Linear Dodge</option>
-                    <option value="lighter-color">Lighter Color</option>
-                    <option value="overlay">Overlay</option>
-                    <option value="soft-light">Soft Light</option>
-                    <option value="hard-light">Hard Light</option>
-                    <option value="vivid-light">Vivid Light</option>
-                    <option value="linear-light">Linear Light</option>
-                    <option value="pin-light">Pin Light</option>
-                    <option value="hard-mix">Hard Mix</option>
-                    <option value="difference">Difference</option>
-                    <option value="exclusion">Exclusion</option>
-                    <option value="subtract">Subtract</option>
-                    <option value="divide">Divide</option>
-                    <option value="hue">Hue</option>
-                    <option value="saturation">Saturation</option>
-                    <option value="color">Color</option>
-                    <option value="luminosity">Luminosity</option>
-                </select>
-                <span class="chevron" aria-hidden="true"></span>
-              </span>
-            </div>
-          </div>
-          <p class="hint adv-hint">
-            Click the white card to change its colour. Blend mode previews live; Apply sends it when
-            Photon exposes a blend parameter for layer styles.
-          </p>
-        </details>
       </details>
+
+    <details class="advanced">
+      <summary>Advanced</summary>
+      <div class="adv-stack">
+        <div class="mini">
+          <span>Type</span>
+          <span class="select">
+            <select id="kind" aria-label="Shadow type">
+              <option value="dropShadow" selected>Drop shadow</option>
+              <option value="innerShadow">Inner shadow</option>
+            </select>
+            <span class="chevron" aria-hidden="true"></span>
+          </span>
+        </div>
+        <div class="mini">
+          <span>Blend</span>
+          <span class="select">
+            <select id="blend" aria-label="Shadow blend mode">
+                <option value="normal" selected>Normal</option>
+                <option value="dissolve">Dissolve</option>
+                <option value="darken">Darken</option>
+                <option value="multiply">Multiply</option>
+                <option value="color-burn">Color Burn</option>
+                <option value="linear-burn">Linear Burn</option>
+                <option value="darker-color">Darker Color</option>
+                <option value="lighten">Lighten</option>
+                <option value="screen">Screen</option>
+                <option value="color-dodge">Color Dodge</option>
+                <option value="linear-dodge">Linear Dodge</option>
+                <option value="lighter-color">Lighter Color</option>
+                <option value="overlay">Overlay</option>
+                <option value="soft-light">Soft Light</option>
+                <option value="hard-light">Hard Light</option>
+                <option value="vivid-light">Vivid Light</option>
+                <option value="linear-light">Linear Light</option>
+                <option value="pin-light">Pin Light</option>
+                <option value="hard-mix">Hard Mix</option>
+                <option value="difference">Difference</option>
+                <option value="exclusion">Exclusion</option>
+                <option value="subtract">Subtract</option>
+                <option value="divide">Divide</option>
+                <option value="hue">Hue</option>
+                <option value="saturation">Saturation</option>
+                <option value="color">Color</option>
+                <option value="luminosity">Luminosity</option>
+            </select>
+            <span class="chevron" aria-hidden="true"></span>
+          </span>
+        </div>
+      </div>
+      <p class="hint adv-hint">
+        Click the white card to change its colour. Blend mode previews live; Apply sends it when
+        Photon exposes a blend parameter for layer styles.
+      </p>
+    </details>
+
 
       <input id="cardColour" type="color" value="#f7f7f7" hidden />
 

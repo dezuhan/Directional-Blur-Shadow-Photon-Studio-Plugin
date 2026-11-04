@@ -74,6 +74,11 @@ MIT licensed — see [LICENSE](LICENSE).
 
 ## Changelog
 
+### 0.15.3
+
+- The Advanced section sits outside the Drop Shadow card and has no box of its own; only a
+  hairline separates it from the values.
+
 ### 0.15.2
 
 - The Type and Blend rows are no longer `<label>` wrappers: a label around a nested `<select>`
