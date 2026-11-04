@@ -74,6 +74,10 @@ MIT licensed — see [LICENSE](LICENSE).
 
 ## Changelog
 
+### 0.16.3
+
+- Single-column value grid threshold lowered to 300 px.
+
 ### 0.16.2
 
 - The single-column value grid now triggers at panel widths up to 350 px (was 430 px); wider

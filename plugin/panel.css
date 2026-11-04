@@ -773,7 +773,7 @@ select.input option {
   container-type: inline-size;
 }
 
-@container (max-width: 350px) {
+@container (max-width: 300px) {
   .shadow-grid {
     grid-template-columns: 1fr;
   }
