@@ -26,6 +26,7 @@ const el = {
   serviceBtn: document.getElementById("serviceBtn"),
   detailsOverlay: document.getElementById("detailsOverlay"),
   detailsClose: document.getElementById("detailsClose"),
+  copyLog: document.getElementById("copyLog"),
   detailsLog: document.getElementById("detailsLog"),
   darkness: document.getElementById("darkness"),
   colour: document.getElementById("colour"),
@@ -78,6 +79,30 @@ function addDetail(line) {
 
 function renderDetails() {
   el.detailsLog.textContent = detailsLines.length ? detailsLines.join("\n") : "No log yet.";
+}
+
+async function copyAllLogs() {
+  const text = (el.detailsLog && el.detailsLog.textContent) || "No log yet.";
+  const done = () => {
+    el.copyLog.classList.add("is-copied");
+    el.copyLog.title = "Copied";
+    setTimeout(() => {
+      el.copyLog.classList.remove("is-copied");
+      el.copyLog.title = "Copy all logs";
+    }, 1200);
+  };
+  try {
+    await navigator.clipboard.writeText(text);
+    done();
+  } catch {
+    const area = document.createElement("textarea");
+    area.value = text;
+    document.body.append(area);
+    area.select();
+    document.execCommand("copy");
+    area.remove();
+    done();
+  }
 }
 
 function openDetails() {
@@ -660,6 +685,7 @@ function wire() {
   el.detailsBtn.addEventListener("click", openDetails);
   el.serviceBtn.addEventListener("click", () => void checkService());
   el.detailsClose.addEventListener("click", () => (el.detailsOverlay.hidden = true));
+  el.copyLog.addEventListener("click", () => void copyAllLogs());
   el.detailsOverlay.addEventListener("click", (event) => {
     if (event.target === el.detailsOverlay) el.detailsOverlay.hidden = true;
   });
@@ -679,7 +705,7 @@ async function init() {
   setColour(el.colour.value, { quiet: true });
   badge("Ready", "ok");
   setStatus("drag the light, then Preview");
-  addDetail("panel ready · v0.18.0");
+  addDetail("panel ready · v0.18.1");
   await refreshSelection();
   setInterval(refreshSelection, 2000);
   drawPreview();

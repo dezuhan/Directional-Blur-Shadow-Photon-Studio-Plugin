@@ -75,6 +75,10 @@ MIT licensed — see [LICENSE](LICENSE).
 
 ## Changelog
 
+### 0.18.1
+
+- Removed the long hint under the preview. Details now has a **copy all logs** icon.
+
 ### 0.18.0
 
 - The preview card follows the **selected layer's aspect ratio** instead of a fixed 4:3 shape.
