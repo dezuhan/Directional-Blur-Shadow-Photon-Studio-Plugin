@@ -90,16 +90,23 @@ Three details that took measurement rather than guessing:
 ## Testing
 
 ```powershell
-node tools/shadow-test.cjs     # 18 tests
+node tools/shadow-test.cjs     # 21 tests: presets, angle, payloads, styles
+node tools/colour-test.cjs     # 6 tests: hex/rgb/hsv maths for the picker
 node tools/bench.cjs           # pure-maths µs and operation counts
 ```
 
-The suite covers the preset maths (including the Figma opacity column at 100/45 %), the angle
-conversion, parameter mapping for angular and positional hosts, the colour-encoding retry loop, the
-styles snapshot/restore, and the single-write pipeline. A Preview sends **4 operations** in total
+The suites cover the preset maths (including the Figma opacity column at 100/45 % and the
+per-shadow blur), the angle conversion, parameter mapping for angular and positional hosts, the
+colour encodings and the retry loop, the picker's hex/rgb/hsv maths, the styles snapshot/restore and
+the single-write pipeline. A Preview sends **4 operations** in total
 (`documents.active` ×2, `effect.describe`, `layer.effects.set`).
 
 ## Changelog
+
+### 0.14.2
+
+- Documentation: test counts and the testing commands now match the three suites
+  (21 shadow + 6 colour tests, plus the bench).
 
 ### 0.14.1
 
