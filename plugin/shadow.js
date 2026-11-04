@@ -266,8 +266,14 @@
     if (!node || typeof node !== "object" || Array.isArray(node)) return false;
     const keys = Object.keys(node);
     const hasName = keys.some((key) => key === "name" || key === "key" || key === "id" || key === "param");
+    if (!hasName) return false;
     const hasValue = keys.some((key) => key === "default" || key === "value" || key === "type");
-    return hasName && hasValue;
+    if (hasValue) return true;
+    // a descriptor without a default (a colour parameter often has none) is still a descriptor
+    return keys.every((key) => {
+      const value = node[key];
+      return value === null || typeof value !== "object";
+    });
   }
 
   /**
@@ -428,12 +434,16 @@
     if (colourName) {
       const meta = map.get(colourName.toLowerCase());
       const defaultValue = meta && meta.value;
-      if (typeof defaultValue === "string") {
-        const hex = String(params.colour).replace("#", "").toUpperCase();
-        out[colourName] = defaultValue.startsWith("#") ? "#" + hex : hex;
-      } else {
-        out[colourName] = rgba(params.colour);
-      }
+      const format = (options && options.colourFormat) || "auto";
+      const hex = String(params.colour).replace("#", "").toUpperCase();
+      let value;
+      if (format === "hex") value = "#" + hex;
+      else if (format === "hex-bare") value = hex;
+      else if (format === "rgb") value = rgba(params.colour);
+      else if (typeof defaultValue === "string") value = defaultValue.startsWith("#") ? "#" + hex : hex;
+      else if (defaultValue && typeof defaultValue === "object") value = rgba(params.colour);
+      else value = hex; // no default to learn from: Photon's dial shows bare hex
+      out[colourName] = value;
     }
     if (blendName) {
       const meta = map.get(blendName.toLowerCase());
@@ -518,6 +528,7 @@
       groupId: null,
       mode: "effects",
       effects: payloads.length,
+      payloads,
       stylesBefore,
       plan,
     };

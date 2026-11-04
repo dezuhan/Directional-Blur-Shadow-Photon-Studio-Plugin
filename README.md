@@ -131,6 +131,17 @@ from that. The shadow therefore lands directly behind the subject in either conv
 
 ## Changelog
 
+### 0.10.2
+
+- **Colour parameter found.** A descriptor without a `default` (colour parameters often have none)
+  was skipped by the parser, so `color` was never sent and the host kept its black default. Such
+  entries are now recognised, and a colour with no default is written as bare hex (`FF0000`), which
+  is how Photon's dial shows it.
+- **Advanced → Shadow colour format** forces `auto`, `#RRGGBB`, bare `RRGGBB` or an
+  `{space:"rgb",…}` object, so the right notation can be picked without another build.
+- **Inspect** now prints the stored layer styles *and* the last payload that was sent.
+- Tests: 24.
+
 ### 0.10.1
 
 - **Angle convention corrected.** Photon's dial is Photoshop's: the angle is the *light* direction,

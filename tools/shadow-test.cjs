@@ -402,6 +402,37 @@ test("effectAngle maps screen angles onto Photon's Photoshop dial", () => {
   assert.equal(Shadow.effectAngle(-90), 270);
 });
 
+
+test("descriptors without a default still expose the colour parameter", () => {
+  const map = Shadow.describeToMap({ params: [{ name: "color" }, { name: "angle", default: 120 }] });
+  assert.equal(map.size, 2);
+  assert.ok(map.has("color"));
+
+  const host = {
+    params: [
+      { name: "angle", default: 120 },
+      { name: "distance", default: 5 },
+      { name: "size", default: 5 },
+      { name: "opacity", default: 75 },
+      { name: "color" },
+    ],
+  };
+  const out = Shadow.effectParams(host, { distance: 20, blur: 10, opacity: 0.5 }, { angle: 0, colour: "#ff0000" });
+  assert.equal(out.color, "FF0000", "bare hex when the host gives no colour default");
+});
+
+test("colour format can be forced", () => {
+  const described = {
+    params: [{ name: "color", default: "000000" }, { name: "opacity", default: 75 }],
+  };
+  const at = (format) =>
+    Shadow.effectParams(described, { distance: 5, blur: 5, opacity: 0.5 }, { angle: 0, colour: "#ff0000" }, { colourFormat: format }).color;
+  assert.equal(at("auto"), "FF0000");
+  assert.equal(at("hex"), "#FF0000");
+  assert.equal(at("hex-bare"), "FF0000");
+  assert.deepEqual(at("rgb"), { space: "rgb", r: 1, g: 0, b: 0, a: 1 });
+});
+
 (async () => {
   let failed = 0;
   for (const [name, fn] of tests) {

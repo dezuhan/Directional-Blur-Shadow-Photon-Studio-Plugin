@@ -13,6 +13,7 @@ const el = {
   badge: document.getElementById("badge"),
   mode: document.getElementById("mode"),
   angleMode: document.getElementById("angleMode"),
+  colourFormat: document.getElementById("colourFormat"),
   modeHint: document.getElementById("modeHint"),
   angle: document.getElementById("angle"),
   distance: document.getElementById("distance"),
@@ -41,6 +42,7 @@ let preview = null; // { layerIds, groupId, mode, effects } of the current previ
 let busy = false;
 let lastParams = { ...Shadow.DEFAULTS };
 let dragging = false;
+let lastPayload = null;
 
 function badge(text, kind) {
   el.badge.textContent = text;
@@ -104,6 +106,7 @@ async function buildFor(doc, layerId, params, mode) {
       layerId,
       params,
       angleMode: el.angleMode ? el.angleMode.value : "light-yup",
+      colourFormat: el.colourFormat ? el.colourFormat.value : "auto",
       onStep: (done, total) => setStatus("shadow " + done + " / " + total),
     });
   }
@@ -160,6 +163,7 @@ async function runPreview() {
     setStatus(mode === "effects" ? "adding " + lastParams.steps + " drop shadows…" : "building " + lastParams.steps + " layers…");
     const startedAt = performance.now();
     preview = await buildFor(doc, layerId, lastParams, mode);
+    lastPayload = (preview && preview.payloads) || null;
     const elapsed = Math.round(performance.now() - startedAt);
     preview.mode = mode;
     drawPreview();
@@ -393,13 +397,14 @@ async function inspectEffects() {
     if (!doc) throw new Error("No active document.");
     const described = await api.documents.execute("effect.describe", { kind: "dropShadow" }, doc.id);
     const names = [...Shadow.describeToMap(described).keys()];
-    const layer = (doc.layers || []).find((item) => item.id === (doc.selectedLayerIds || []).slice(-1)[0]);
-    const effects =
-      layer && (layer.effects || layer.layerEffects || layer.styles || null);
+    const selectedId = (doc.selectedLayerIds || []).slice(-1)[0];
+    const layer = (doc.layers || []).find((item) => item.id === selectedId);
+    const stored = layer && (layer.styles || layer.effects || layer.layerEffects || null);
     el.debugLog.textContent =
       "dropShadow parameters (" + names.length + "): " + names.join(", ") +
       "\n\n" + JSON.stringify(described, null, 1) +
-      "\n\nlayer effects:\n" + JSON.stringify(effects, null, 1);
+      "\n\nstored layer styles:\n" + JSON.stringify(stored, null, 1) +
+      "\n\nlast payload sent:\n" + JSON.stringify(lastPayload, null, 1);
     el.badge.textContent = "Ready";
     el.badge.className = "badge ok";
     setStatus("inspected " + names.length + " parameter(s)");

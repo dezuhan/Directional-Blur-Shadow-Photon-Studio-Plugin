@@ -66,6 +66,16 @@
         </div>
 
         <div class="field">
+          <label class="label" for="colourFormat">Shadow colour format</label>
+          <select id="colourFormat" class="input">
+            <option value="auto" selected>Auto — follow the host default</option>
+            <option value="hex">Hex with # — #FF0000</option>
+            <option value="hex-bare">Hex bare — FF0000</option>
+            <option value="rgb">RGB object — {space, r, g, b, a}</option>
+          </select>
+        </div>
+
+        <div class="field">
           <label class="label" for="angleMode">Angle convention</label>
           <select id="angleMode" class="input">
             <option value="light-yup" selected>Photon / Photoshop — light angle, 0° right, 90° up</option>
