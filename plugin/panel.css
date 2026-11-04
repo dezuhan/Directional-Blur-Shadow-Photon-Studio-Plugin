@@ -744,3 +744,131 @@ select.input option {
   transform: rotate(180deg);
 }
 
+
+/* ---------- clean value rows (2x2), advanced options below ---------- */
+
+.sheet {
+  width: 100%;
+  max-width: none;
+  padding: 9px 10px 10px;
+  background: var(--sh-control);
+}
+
+.shadow-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px 10px;
+}
+
+.mini {
+  display: grid;
+  grid-template-columns: 60px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mini > span:first-child {
+  flex: none;
+  color: var(--sh-muted);
+  font-size: 10px;
+  letter-spacing: 0.01em;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.mini input,
+.mini select {
+  width: 100%;
+  min-width: 0;
+  height: 24px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--sh-raise), var(--sh-control);
+  box-shadow: var(--sh-hairline);
+  color: var(--sh-text);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mini input {
+  text-align: right;
+}
+
+.mini select {
+  padding-right: 22px;
+  text-align: left;
+}
+
+.mini .select {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.mini select {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.shadow-grid,
+.adv-stack,
+.sheet {
+  min-width: 0;
+}
+
+.mini-row {
+  display: contents;
+}
+
+.advanced {
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid var(--sh-stroke);
+}
+
+.advanced > summary {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  list-style: none;
+  color: var(--sh-muted);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.advanced > summary::-webkit-details-marker {
+  display: none;
+}
+
+.advanced > summary::after {
+  content: "";
+  margin-left: auto;
+  width: 5px;
+  height: 5px;
+  border-right: 1.3px solid currentColor;
+  border-bottom: 1.3px solid currentColor;
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+
+.advanced[open] > summary::after {
+  transform: rotate(-135deg) translate(-1px, -1px);
+}
+
+.adv-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.adv-hint {
+  margin: 8px 0 0;
+  color: var(--sh-soft);
+  font-size: 9px;
+  line-height: 14px;
+}

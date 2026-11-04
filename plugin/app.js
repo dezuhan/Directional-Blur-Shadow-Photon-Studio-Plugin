@@ -18,6 +18,8 @@ const el = {
   distance: document.getElementById("distance"),
   soft: document.getElementById("soft"),
   kind: document.getElementById("kind"),
+  blend: document.getElementById("blend"),
+  cardColour: document.getElementById("cardColour"),
   darkness: document.getElementById("darkness"),
   colour: document.getElementById("colour"),
   apply: document.getElementById("apply"),
@@ -43,6 +45,7 @@ let dragging = false;
 let drawFrame = null;
 let lastParams = { ...Shadow.DEFAULTS };
 let hsv = { h: 0, s: 0, v: 0 };
+let objectColour = "#f7f7f7";
 
 function badge(text, kind) {
   el.badge.textContent = text;
@@ -69,6 +72,7 @@ function readParams() {
     kind: el.kind.value,
     colour: el.colour.value,
     darkness: el.darkness.value,
+    blend: el.blend.value,
   });
 }
 
@@ -79,6 +83,8 @@ function applyParamsToUi(params) {
   el.kind.value = params.kind;
   el.darkness.value = String(params.darkness);
   el.colour.value = params.colour;
+  el.blend.value = params.blend;
+  if (typeof window.syncCustomSelects === "function") window.syncCustomSelects();
 }
 
 function setBusy(value) {
@@ -91,6 +97,41 @@ function setBusy(value) {
 
 const CARD = { width: 112, height: 82 };
 const SCALE = 0.42;
+
+// Canvas only has a subset of Photoshop's blend modes; the rest map to the nearest compositing op.
+const PREVIEW_BLEND = {
+  normal: "source-over",
+  dissolve: "source-over",
+  darken: "darken",
+  multiply: "multiply",
+  "color-burn": "color-burn",
+  "linear-burn": "multiply",
+  "darker-color": "darken",
+  lighten: "lighten",
+  screen: "screen",
+  "color-dodge": "color-dodge",
+  "linear-dodge": "screen",
+  "lighter-color": "lighten",
+  overlay: "overlay",
+  "soft-light": "soft-light",
+  "hard-light": "hard-light",
+  "vivid-light": "overlay",
+  "linear-light": "overlay",
+  "pin-light": "overlay",
+  "hard-mix": "overlay",
+  difference: "difference",
+  exclusion: "exclusion",
+  subtract: "difference",
+  divide: "screen",
+  hue: "hue",
+  saturation: "saturation",
+  color: "color",
+  luminosity: "luminosity",
+};
+
+function previewBlend(name) {
+  return PREVIEW_BLEND[name] || "source-over";
+}
 
 function canvasCentre() {
   return { x: el.previewCanvas.width / 2, y: el.previewCanvas.height / 2 };
@@ -142,6 +183,7 @@ function drawPreview() {
   if (!isInner) {
     for (const layer of plan.layers) {
       ctx.save();
+      ctx.globalCompositeOperation = previewBlend(params.blend);
       ctx.filter = "blur(" + Math.max(0.5, layer.blur * SCALE) + "px)";
     ctx.fillStyle = "rgba(" + red + "," + green + "," + blue + "," + Math.min(1, layer.opacity).toFixed(3) + ")";
     roundRect(
@@ -158,10 +200,12 @@ function drawPreview() {
   }
 
   ctx.save();
-  ctx.fillStyle = "#f7f7f7";
+  ctx.fillStyle = objectColour;
   roundRect(ctx, centre.x - CARD.width / 2, centre.y - CARD.height / 2, CARD.width, CARD.height, 10);
   ctx.fill();
-  ctx.strokeStyle = "rgba(0,0,0,0.18)";
+  const cardRgb = Colour.hexToRgb(objectColour);
+  const cardLuma = (cardRgb.r * 299 + cardRgb.g * 587 + cardRgb.b * 114) / 1000;
+  ctx.strokeStyle = cardLuma > 140 ? "rgba(0,0,0,0.18)" : "rgba(255,255,255,0.22)";
   ctx.lineWidth = 1;
   ctx.stroke();
   ctx.restore();
@@ -173,6 +217,7 @@ function drawPreview() {
     ctx.clip();
     for (const layer of plan.layers) {
       ctx.save();
+      ctx.globalCompositeOperation = previewBlend(params.blend);
       ctx.filter = "blur(" + Math.max(0.5, layer.blur * SCALE) + "px)";
       ctx.lineWidth = Math.max(1.5, layer.blur * SCALE * 1.2);
       ctx.strokeStyle =
@@ -241,16 +286,30 @@ function drawPreview() {
   }
 }
 
-function handlePointer(event) {
+function canvasPoint(event) {
   const canvas = el.previewCanvas;
   const rect = canvas.getBoundingClientRect();
-  const x = ((event.clientX - rect.left) / rect.width) * canvas.width;
-  const y = ((event.clientY - rect.top) / rect.height) * canvas.height;
+  return {
+    x: ((event.clientX - rect.left) / rect.width) * canvas.width,
+    y: ((event.clientY - rect.top) / rect.height) * canvas.height,
+  };
+}
+
+function insideCard(point) {
   const centre = canvasCentre();
-  const vector = Shadow.vectorToAngleDistance((x - centre.x) / SCALE, (y - centre.y) / SCALE, 300);
+  return (
+    Math.abs(point.x - centre.x) <= CARD.width / 2 &&
+    Math.abs(point.y - centre.y) <= CARD.height / 2
+  );
+}
+
+function handlePointer(event) {
+  const point = canvasPoint(event);
+  const centre = canvasCentre();
+  const vector = Shadow.vectorToAngleDistance((point.x - centre.x) / SCALE, (point.y - centre.y) / SCALE, 300);
   // the handle is the light: dragging it up-right throws the shadow down-left
-  el.angle.value = String(Math.round(((vector.angle + 180) % 360) * 10) / 10);
-  el.distance.value = String(vector.distance);
+  el.angle.value = String(Number((((vector.angle + 180) % 360)).toFixed(1)));
+  el.distance.value = String(Number(vector.distance.toFixed(1)));
   scheduleDraw();
 }
 
@@ -425,7 +484,7 @@ async function runApply() {
     await dropPreview(); // a second Apply replaces the previous result instead of stacking
     setStatus("adding " + Shadow.STEPS + " shadows…");
     await build();
-    await api.settings.set({ shadow: lastParams }).catch(() => {});
+    await api.settings.set({ shadow: lastParams, preview: { objectColour } }).catch(() => {});
     badge("Applied", "ok");
     setStatus("shadow applied to the selected layer");
   } catch (error) {
@@ -455,6 +514,13 @@ function wire() {
   const canvas = el.previewCanvas;
   if (canvas) {
     canvas.addEventListener("pointerdown", (event) => {
+      const point = canvasPoint(event);
+      if (insideCard(point)) {
+        el.cardColour.value = objectColour;
+        if (typeof el.cardColour.showPicker === "function") el.cardColour.showPicker();
+        else el.cardColour.click();
+        return;
+      }
       dragging = true;
       if (canvas.setPointerCapture) canvas.setPointerCapture(event.pointerId);
       handlePointer(event);
@@ -475,6 +541,13 @@ function wire() {
     input.addEventListener("input", () => scheduleDraw());
   }
   el.kind.addEventListener("change", () => scheduleDraw());
+  el.blend.addEventListener("change", () => scheduleDraw());
+  el.cardColour.addEventListener("input", () => {
+    const next = Colour.normaliseHex(el.cardColour.value);
+    if (!next) return;
+    objectColour = next;
+    scheduleDraw();
+  });
   el.apply.addEventListener("click", () => void runApply());
   el.removePreview.addEventListener("click", () => void runRemovePreview());
 }
@@ -487,6 +560,9 @@ async function init() {
     stored = {};
   }
   applyParamsToUi(Shadow.normalise({ ...Shadow.DEFAULTS, ...(stored.shadow || {}) }));
+  const rememberedCard = stored.preview && Colour.normaliseHex(stored.preview.objectColour);
+  objectColour = rememberedCard || "#f7f7f7";
+  el.cardColour.value = objectColour;
   setColour(el.colour.value, { quiet: true });
   badge("Ready", "ok");
   setStatus("drag the light, then Preview");

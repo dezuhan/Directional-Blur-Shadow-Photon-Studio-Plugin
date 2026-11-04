@@ -33,9 +33,39 @@
     colour: "#000000",
     darkness: 100,
     kind: "dropShadow",
+    blend: "normal",
   };
 
   const KINDS = ["dropShadow", "innerShadow"];
+  const BLEND_MODES = [
+    "normal",
+    "dissolve",
+    "darken",
+    "multiply",
+    "color-burn",
+    "linear-burn",
+    "darker-color",
+    "lighten",
+    "screen",
+    "color-dodge",
+    "linear-dodge",
+    "lighter-color",
+    "overlay",
+    "soft-light",
+    "hard-light",
+    "vivid-light",
+    "linear-light",
+    "pin-light",
+    "hard-mix",
+    "difference",
+    "exclusion",
+    "subtract",
+    "divide",
+    "hue",
+    "saturation",
+    "color",
+    "luminosity",
+  ];
   const STEPS = 5;
   const DISTANCE_FACTORS = [1, 0.64, 0.36, 0.16, 0.04];
   // blur / distance ratios, farthest → nearest (Figma's 46/42/35/26/14 px at 163 px)
@@ -57,6 +87,7 @@
       colour: /^#[0-9a-f]{6}$/i.test(String(params.colour)) ? params.colour : DEFAULTS.colour,
       darkness: clamp(params.darkness, 1, 100),
       kind: KINDS.includes(params.kind) ? params.kind : DEFAULTS.kind,
+      blend: BLEND_MODES.includes(String(params.blend)) ? String(params.blend) : DEFAULTS.blend,
     };
   }
 
@@ -278,7 +309,7 @@
     }
     if (blendName) {
       const meta = map.get(blendName.toLowerCase());
-      out[blendName] = typeof meta.value === "string" ? meta.value : "normal";
+      out[blendName] = params.blend || (typeof meta.value === "string" ? meta.value : "normal");
     }
 
     return out;
@@ -410,6 +441,7 @@
     DEFAULTS,
     STEPS,
     KINDS,
+    BLEND_MODES,
     DISTANCE_FACTORS,
     BLUR_FACTORS,
     OPACITY_FACTORS,

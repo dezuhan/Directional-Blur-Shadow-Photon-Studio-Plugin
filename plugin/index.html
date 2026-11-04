@@ -24,17 +24,16 @@
         <summary>
           <span class="sheet-title">Drop Shadow</span>
         </summary>
-        <div class="mini-row">
+
+        <div class="shadow-grid">
           <label class="mini">
-            <span>A °</span>
+            <span>Angle</span>
             <input id="angle" type="number" min="0" max="360" step="1" value="30" />
           </label>
           <label class="mini">
-            <span>D px</span>
+            <span>Distance</span>
             <input id="distance" type="number" min="1" max="300" step="1" value="150" />
           </label>
-        </div>
-        <div class="mini-row">
           <label class="mini">
             <span>Light %</span>
             <input id="darkness" type="number" min="1" max="100" step="1" value="100" />
@@ -45,17 +44,64 @@
           </label>
         </div>
 
-        <label class="mini mini-wide">
-          <span>Type</span>
-          <span class="select">
-            <select id="kind">
-              <option value="dropShadow" selected>Drop shadow</option>
-              <option value="innerShadow">Inner shadow</option>
-            </select>
-            <span class="chevron" aria-hidden="true"></span>
-          </span>
-        </label>
+        <details class="advanced">
+          <summary>Advanced</summary>
+          <div class="adv-stack">
+            <label class="mini">
+              <span>Type</span>
+              <span class="select">
+                <select id="kind">
+                  <option value="dropShadow" selected>Drop shadow</option>
+                  <option value="innerShadow">Inner shadow</option>
+                </select>
+                <span class="chevron" aria-hidden="true"></span>
+              </span>
+            </label>
+            <label class="mini">
+              <span>Blend</span>
+              <span class="select">
+                <select id="blend">
+                    <option value="normal" selected>Normal</option>
+                    <option value="dissolve">Dissolve</option>
+                    <option value="darken">Darken</option>
+                    <option value="multiply">Multiply</option>
+                    <option value="color-burn">Color Burn</option>
+                    <option value="linear-burn">Linear Burn</option>
+                    <option value="darker-color">Darker Color</option>
+                    <option value="lighten">Lighten</option>
+                    <option value="screen">Screen</option>
+                    <option value="color-dodge">Color Dodge</option>
+                    <option value="linear-dodge">Linear Dodge</option>
+                    <option value="lighter-color">Lighter Color</option>
+                    <option value="overlay">Overlay</option>
+                    <option value="soft-light">Soft Light</option>
+                    <option value="hard-light">Hard Light</option>
+                    <option value="vivid-light">Vivid Light</option>
+                    <option value="linear-light">Linear Light</option>
+                    <option value="pin-light">Pin Light</option>
+                    <option value="hard-mix">Hard Mix</option>
+                    <option value="difference">Difference</option>
+                    <option value="exclusion">Exclusion</option>
+                    <option value="subtract">Subtract</option>
+                    <option value="divide">Divide</option>
+                    <option value="hue">Hue</option>
+                    <option value="saturation">Saturation</option>
+                    <option value="color">Color</option>
+                    <option value="luminosity">Luminosity</option>
+                </select>
+                <span class="chevron" aria-hidden="true"></span>
+              </span>
+            </label>
+          </div>
+          <p class="hint adv-hint">
+            Click the white card to change its colour. Blend mode previews live; Apply sends it when
+            Photon exposes a blend parameter for layer styles.
+          </p>
+        </details>
       </details>
+
+      <input id="cardColour" type="color" value="#f7f7f7" hidden />
+
 
       <div class="actions">
         <button id="swatchBtn" class="swatch" type="button" title="Shadow colour">

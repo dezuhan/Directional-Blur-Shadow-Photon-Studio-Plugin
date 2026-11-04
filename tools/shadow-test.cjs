@@ -168,6 +168,25 @@ test("effectParams maps onto the host's parameter names", () => {
   assert.equal(out.spread, 0);
 });
 
+test("normalise keeps a supported blend mode and falls back to normal", () => {
+  assert.equal(Shadow.normalise({ blend: "multiply" }).blend, "multiply");
+  assert.equal(Shadow.normalise({ blend: "nope" }).blend, "normal");
+  assert.ok(Shadow.BLEND_MODES.includes("color-dodge"));
+  assert.ok(Shadow.BLEND_MODES.includes("luminosity"));
+});
+
+test("effectParams forwards the selected blend mode", () => {
+  const out = Shadow.effectParams(
+    DESCRIBED,
+    { distance: 10, blur: 4, opacity: 0.5 },
+    { angle: 0, colour: "#000000", blend: "multiply" },
+  );
+  assert.equal(out.blendMode, "multiply");
+
+  const fallback = Shadow.effectParams(DESCRIBED, { distance: 10, blur: 4, opacity: 0.5 }, { angle: 0, colour: "#000000" });
+  assert.equal(fallback.blendMode, "normal", "uses the host default when no blend is selected");
+});
+
 test("effectParams supports positional X/Y hosts", () => {
   const host = {
     params: [

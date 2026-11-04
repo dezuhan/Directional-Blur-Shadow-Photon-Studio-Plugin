@@ -41,7 +41,9 @@ previous result instead of stacking.
 | `D px` | 1–300 | 150 | How far the shadow travels |
 | `Light %` | 1–100 | 100 | Scales every layer's opacity |
 | `Soft %` | 1–100 | 75 | Scales the blur of every step |
-| `Type` | Drop / Inner shadow | Drop | Which layer style to write |
+| `Type` | Drop / Inner shadow | Drop | Which layer style to write (Advanced) |
+| `Blend` | Photoshop blend list | Normal | Forwarded to the host when layer styles expose a blend parameter; the preview always shows it |
+| white card | click | `#f7f7f7` | Click it in the preview to pick the preview object's colour |
 | swatch | picker | black | Shadow colour (own HSV picker, verified against Photon) |
 
 Five fixed steps (farthest → nearest). Offsets are `distance × 1 / .64 / .36 / .16 / .04`, opacities
@@ -71,6 +73,15 @@ An Apply sends four operations: `documents.active` ×2, `effect.describe`, `laye
 MIT licensed — see [LICENSE](LICENSE).
 
 ## Changelog
+
+### 0.15.0
+
+- Values use a clean 2x2 grid (label + compact field, 100 % width) like Photon's own property rows.
+- Type and the new **Blend** dropdown moved into an Advanced section; the blend list covers the
+  full Photoshop set and the preview composites with the matching canvas mode where one exists.
+- Click the white card in the preview to choose its colour; the choice is remembered with the
+  panel settings.
+- Dragged angles/distances are rounded to one decimal instead of exposing long floats.
 
 ### 0.14.5
 
