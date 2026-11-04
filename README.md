@@ -72,6 +72,11 @@ MIT licensed — see [LICENSE](LICENSE).
 
 ## Changelog
 
+### 0.14.3
+
+- Removed the dashed guide line between the card and the light handle; the handle and sun rays
+  stay, and the preview is cleaner.
+
 ### 0.14.2
 
 - Header now carries the design-system activity word (`Idle · Ready`) alongside the badge.

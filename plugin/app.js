@@ -198,15 +198,6 @@ function drawPreview() {
   const hy = centre.y + Math.sin(lightRad) * reach;
 
   ctx.save();
-  ctx.strokeStyle = "rgba(43,108,246,0.35)";
-  ctx.setLineDash([3, 3]);
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(centre.x, centre.y);
-  ctx.lineTo(hx, hy);
-  ctx.stroke();
-  ctx.setLineDash([]);
-
   ctx.strokeStyle = "#2b6cf6";
   ctx.lineWidth = 1.6;
   ctx.beginPath();
