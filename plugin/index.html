@@ -35,10 +35,18 @@
               <input id="darkness" type="number" min="1" max="100" step="1" value="100" />
             </label>
             <label class="mini">
-              <span>Soft px</span>
-              <input id="blur" type="number" min="1" max="75" step="1" value="75" />
+              <span>Soft %</span>
+              <input id="soft" type="number" min="1" max="100" step="1" value="75" />
             </label>
           </div>
+
+          <label class="mini mini-wide">
+            <span>Type</span>
+            <select id="kind">
+              <option value="dropShadow" selected>Drop shadow</option>
+              <option value="innerShadow">Inner shadow</option>
+            </select>
+          </label>
         </details>
       </div>
 

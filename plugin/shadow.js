@@ -1,17 +1,21 @@
 /*
  * Directional Shadow — Photon plugin.
  *
- * Adds N dropShadow layer styles to the SELECTED layer (no duplicate) through one
- * `layer.effects.set` call, merging the layer's existing styles so nothing the user made is lost.
- * The styles are snapshotted first, so a preview can be reverted with `restoreLayerStyles`.
+ * Adds N layer styles to the SELECTED layer (no duplicate) through one `layer.effects.set` call,
+ * merging the layer's existing styles so nothing the user made is lost. The styles are snapshotted
+ * first, so a preview can be reverted with `restoreLayerStyles`.
  *
- * Five fixed steps, preset from the Figma "Beautiful Shadows" plugin:
+ * Five fixed steps, modelled on the Figma "Beautiful Shadows" plugin:
  *   offset  = distance × [1, .64, .36, .16, .04]
- *   blur    = softness × [1, .91, .76, .57, .3]
+ *   blur    = distance × [.283, .258, .215, .16, .086] × soft%     (soft 100 % at D 163 px gives
+ *             the plugin's own 46 / 42 / 35 / 26 / 14 px column)
  *   opacity = lighting × [.02, .15, .50, .85, .98]
  *
- * Photon's drop-shadow angle is the LIGHT direction on a Photoshop dial (0° right, 90° up), so a
- * shadow pointing at θ needs light = 180 − θ.
+ * Photon's shadow angle is the LIGHT direction on a Photoshop dial (0° right, 90° up), so a shadow
+ * pointing at θ needs light = 180 − θ.
+ *
+ * Both drop shadow and inner shadow are supported; the host stores them in `styles.dropShadows` and
+ * `styles.innerShadows` respectively.
  *
  * Pure maths and an injected `api` keep this testable in Node.
  */
@@ -25,14 +29,17 @@
   const DEFAULTS = {
     angle: 30,
     distance: 150,
-    blur: 75,
+    soft: 75,
     colour: "#000000",
     darkness: 100,
+    kind: "dropShadow",
   };
 
+  const KINDS = ["dropShadow", "innerShadow"];
   const STEPS = 5;
   const DISTANCE_FACTORS = [1, 0.64, 0.36, 0.16, 0.04];
-  const BLUR_FACTORS = [1, 0.91, 0.76, 0.57, 0.3];
+  // blur / distance ratios, farthest → nearest (Figma's 46/42/35/26/14 px at 163 px)
+  const BLUR_FACTORS = [0.283, 0.258, 0.215, 0.16, 0.086];
   const OPACITY_FACTORS = [0.02, 0.15, 0.5, 0.85, 0.98];
 
   function clamp(value, low, high) {
@@ -46,9 +53,10 @@
     return {
       angle: ((clamp(params.angle, 0, 360) % 360) + 360) % 360,
       distance: clamp(params.distance, 1, 300),
-      blur: clamp(params.blur, 1, 75),
+      soft: clamp(params.soft, 1, 100),
       colour: /^#[0-9a-f]{6}$/i.test(String(params.colour)) ? params.colour : DEFAULTS.colour,
       darkness: clamp(params.darkness, 1, 100),
+      kind: KINDS.includes(params.kind) ? params.kind : DEFAULTS.kind,
     };
   }
 
@@ -59,14 +67,17 @@
     const nx = Math.cos(angleRad);
     const ny = Math.sin(angleRad);
     const lighting = params.darkness / 100;
+    const softness = params.soft / 100;
     const layers = [];
 
     for (let index = 0; index < STEPS; index += 1) {
       layers.push({
         step: STEPS - index,
+        distance: params.distance * DISTANCE_FACTORS[index],
         dx: nx * params.distance * DISTANCE_FACTORS[index],
         dy: ny * params.distance * DISTANCE_FACTORS[index],
-        blur: Math.max(0.1, params.blur * BLUR_FACTORS[index]),
+        // every shadow carries its own blur, scaled by how far it sits from the layer
+        blur: Math.max(0.1, params.distance * BLUR_FACTORS[index] * softness),
         opacity: Math.min(1, lighting * OPACITY_FACTORS[index]),
       });
     }
@@ -121,7 +132,7 @@
     });
   }
 
-  /** Normalise effect.describe(kind:"dropShadow") into name → metadata, whatever the wrapper. */
+  /** Normalise effect.describe(kind) into name → metadata, whatever the wrapper looks like. */
   function describeToMap(described) {
     const map = new Map();
 
@@ -181,7 +192,7 @@
   /** Our screen angle (0° right, 90° down) → Photon's y-up Photoshop light dial. */
   function effectAngle(shadowAngle) {
     const theta = ((Number(shadowAngle) % 360) + 360) % 360;
-    return ((180 - theta) % 360 + 360) % 360;
+    return (((180 - theta) % 360) + 360) % 360;
   }
 
   /** Convert a drag vector into { angle, distance } for the light handle (angle = shadow direction). */
@@ -189,7 +200,7 @@
     const distance = Math.hypot(dx, dy);
     let angle = (Math.atan2(dy, dx) * 180) / Math.PI;
     if (angle < 0) angle += 360;
-    const limit = Number(maxDistance) || 2000;
+    const limit = Number(maxDistance) || 300;
     return {
       angle: Math.round(angle * 10) / 10,
       distance: Math.max(1, Math.min(limit, Math.round(distance * 10) / 10)),
@@ -204,14 +215,14 @@
   }
 
   /**
-   * Build one dropShadow payload. Only parameter names listed by `effect.describe` are sent, units
-   * follow the host's own defaults, and the colour encoding is chosen by the caller because Photon
-   * does not document which one a layer style stores.
+   * Build one effect payload. Only parameter names listed by `effect.describe` are sent, units follow
+   * the host's own defaults, and the colour encoding is chosen by the caller because Photon does not
+   * document which one a layer style stores.
    */
   function effectParams(described, entry, params, options) {
     const map = describeToMap(described);
     if (map.size === 0) {
-      const error = new Error("effect.describe returned nothing, so dropShadow parameters are unknown");
+      const error = new Error("effect.describe returned nothing, so the shadow parameters are unknown");
       error.code = "EFFECT_DESCRIBE_MISSING";
       throw error;
     }
@@ -278,7 +289,12 @@
     const source = layer.styles || layer.effects || layer.layerEffects || layer.layerStyle || null;
     if (!source || typeof source !== "object") return null;
     if (!Array.isArray(source.dropShadows) && !Array.isArray(source.strokes)) return null;
-    return { ...emptyStyles(), ...source, dropShadows: [...(source.dropShadows || [])] };
+    return {
+      ...emptyStyles(),
+      ...source,
+      dropShadows: [...(source.dropShadows || [])],
+      innerShadows: [...(source.innerShadows || [])],
+    };
   }
 
   function sameColour(left, right) {
@@ -290,17 +306,19 @@
   }
 
   /**
-   * Effects mode: append the 5 shadows to the SELECTED layer.
+   * Write the five shadows onto the SELECTED layer.
    *
-   * Photon does not document the colour encoding for a layer style, so the write is verified by
-   * reading the styles back and trying the next encoding when the colour did not take. When the
-   * document model does not expose styles there is nothing to verify against, so the first encoding
-   * (an {space:"rgb"} object, the same shape `pixels.fill` accepts) is kept.
+   * `layer.effects.set` replaces the whole styles object, so the current styles are read first and
+   * merged: existing effects survive and the snapshot lets the caller undo a preview. Photon does not
+   * document the colour encoding, so the write is verified by reading the styles back and retrying
+   * with the next encoding when the colour did not take.
    */
   async function applyLayerStyles(api, options) {
     const documentId = options.documentId;
     const layerId = options.layerId;
     const plan = planLayers(options.params);
+    const kind = plan.params.kind;
+    const key = kind === "innerShadow" ? "innerShadows" : "dropShadows";
     const formats = ["rgb", "hex-bare", "hex"];
 
     const doc = await api.documents.active();
@@ -309,7 +327,7 @@
 
     let described = null;
     try {
-      described = await execute(api, documentId, "effect.describe", { kind: "dropShadow" });
+      described = await execute(api, documentId, "effect.describe", { kind });
     } catch {
       described = null;
     }
@@ -322,12 +340,12 @@
       payloads = plan.layers.map((entry) =>
         effectParams(
           described,
-          { distance: Math.hypot(entry.dx, entry.dy), blur: entry.blur, opacity: entry.opacity },
+          { distance: entry.distance, blur: entry.blur, opacity: entry.opacity },
           plan.params,
           { colourFormat: format },
         ),
       );
-      const styles = { ...base, dropShadows: [...(base.dropShadows || []), ...payloads] };
+      const styles = { ...base, [key]: [...(base[key] || []), ...payloads] };
       await execute(api, documentId, "layer.effects.set", { layerIds: [layerId], styles });
       usedFormat = format;
 
@@ -339,9 +357,9 @@
         stored = null;
       }
       if (!stored) break;
-      const colourKey = Object.keys(payloads[0]).find((key) => /colou?r|tint/i.test(key));
+      const colourKey = Object.keys(payloads[0]).find((name) => /colou?r|tint/i.test(name));
       if (!colourKey) break;
-      const written = stored.dropShadows[stored.dropShadows.length - payloads.length];
+      const written = stored[key][stored[key].length - payloads.length];
       if (!written) break;
       if (sameColour(written[colourKey], payloads[0][colourKey])) break;
     }
@@ -349,6 +367,7 @@
     return {
       layerIds: [layerId],
       mode: "effects",
+      kind,
       effects: payloads.length,
       colourFormat: usedFormat,
       payloads,
@@ -373,6 +392,7 @@
   return {
     DEFAULTS,
     STEPS,
+    KINDS,
     DISTANCE_FACTORS,
     BLUR_FACTORS,
     OPACITY_FACTORS,

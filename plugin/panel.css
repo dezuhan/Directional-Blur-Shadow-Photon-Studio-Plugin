@@ -201,6 +201,31 @@ input:focus-visible {
   text-align: right;
 }
 
+.mini-wide {
+  margin-top: 4px;
+}
+
+.mini select {
+  width: 100%;
+  min-width: 0;
+  height: 18px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--sh-raise), var(--sh-control);
+  box-shadow: var(--sh-hairline);
+  color: var(--sh-text);
+  font-size: 10px;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+.mini select option {
+  background: var(--ph-black-5, #151515);
+  color: var(--sh-text);
+}
+
 .mini input:focus-visible {
   outline: 1.5px solid var(--sh-accent);
   outline-offset: 0;

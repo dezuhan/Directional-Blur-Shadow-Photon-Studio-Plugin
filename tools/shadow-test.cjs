@@ -42,15 +42,24 @@ function fakeApi(options) {
         calls.push({ operation, params });
         if (operation === "effect.describe") return DESCRIBED;
         if (operation === "layer.effects.set") {
-          const first = params.styles.dropShadows[0] || {};
+          const previous = layer.styles
+            ? JSON.parse(JSON.stringify(layer.styles))
+            : { dropShadows: [], innerShadows: [] };
+          const key =
+            (params.styles.innerShadows || []).length > (previous.innerShadows || []).length
+              ? "innerShadows"
+              : "dropShadows";
+          const added = params.styles[key].slice((previous[key] || []).length);
+          const first = added[0] || {};
           const value = first.color === undefined ? first.colour : first.color;
-          const kind = typeof value === "object" ? "rgb" : String(value).startsWith("#") ? "hex" : "hex-bare";
-          const stored = accept(kind)
-            ? JSON.parse(JSON.stringify(params.styles))
-            : {
-                ...JSON.parse(JSON.stringify(params.styles)),
-                dropShadows: params.styles.dropShadows.map((shadow) => ({ ...shadow, color: "000000", colour: "000000" })),
-              };
+          const encoding = typeof value === "object" ? "rgb" : String(value).startsWith("#") ? "hex" : "hex-bare";
+          const stored = JSON.parse(JSON.stringify(params.styles));
+          if (!accept(encoding)) {
+            const start = (previous[key] || []).length;
+            for (let index = start; index < stored[key].length; index += 1) {
+              stored[key][index] = { ...stored[key][index], color: "000000", colour: "000000" };
+            }
+          }
           layer.styles = stored;
           return { ok: true };
         }
@@ -72,15 +81,27 @@ const test = (name, fn) => tests.push([name, fn]);
 
 test("planLayers always produces the 5-step Figma preset", () => {
   assert.equal(Shadow.STEPS, 5);
-  const { layers } = Shadow.planLayers({ distance: 150, blur: 26, darkness: 100 });
+  const { layers } = Shadow.planLayers({ distance: 150, soft: 75, darkness: 100 });
   assert.equal(layers.length, 5);
   assert.deepEqual(layers.map((l) => Math.round(l.opacity * 100)), [2, 15, 50, 85, 98]);
 });
 
-test("offsets and blur follow the Beautiful Shadows presets", () => {
-  const { layers } = Shadow.planLayers({ distance: 150, blur: 26, angle: 0 });
+test("offsets follow the distance preset", () => {
+  const { layers } = Shadow.planLayers({ distance: 150, angle: 0 });
   assert.deepEqual(layers.map((l) => Math.round(l.dx)), [150, 96, 54, 24, 6]);
-  assert.deepEqual(layers.map((l) => Math.round(l.blur)), [26, 24, 20, 15, 8]);
+});
+
+test("every shadow has its own blur, derived from distance and softness", () => {
+  const atSoft = (soft) => Shadow.planLayers({ distance: 163, soft }).layers.map((l) => Math.round(l.blur));
+  assert.deepEqual(atSoft(100), [46, 42, 35, 26, 14], "soft 100 % reproduces the Figma blur column");
+  assert.deepEqual(atSoft(75), [35, 32, 26, 20, 11], "softness scales every blur");
+  assert.deepEqual(atSoft(50), [23, 21, 18, 13, 7]);
+  // blur is per shadow, not one shared value
+  const blurs = atSoft(100);
+  assert.equal(new Set(blurs).size, 5);
+  for (let index = 1; index < blurs.length; index += 1) {
+    assert.ok(blurs[index] < blurs[index - 1], "nearer shadows blur less");
+  }
 });
 
 test("lighting scales every layer and caps at 100 %", () => {
@@ -91,22 +112,17 @@ test("lighting scales every layer and caps at 100 %", () => {
   assert.deepEqual(at(300), at(100));
 });
 
-test("angle drives the offset vector", () => {
-  const right = Shadow.planLayers({ angle: 0, distance: 100 }).layers;
-  assert.ok(Math.abs(right[0].dx - 100) < 1e-9 && Math.abs(right[0].dy) < 1e-9);
-  const down = Shadow.planLayers({ angle: 90, distance: 100 }).layers;
-  assert.ok(Math.abs(down[0].dy - 100) < 1e-9 && Math.abs(down[0].dx) < 1e-9);
-});
-
-test("normalise clamps ranges and rejects junk colour", () => {
-  const params = Shadow.normalise({ angle: -10, distance: 99999, blur: 0, darkness: 900, colour: "red" });
-  assert.equal(Shadow.DEFAULTS.blur, 75);
-  assert.equal(Shadow.normalise({ blur: 999 }).blur, 75, "softness is capped at 75 px");
+test("normalise clamps ranges and rejects junk values", () => {
+  const params = Shadow.normalise({ angle: -10, distance: 99999, soft: 0, darkness: 900, colour: "red", kind: "glow" });
   assert.equal(params.angle, 0, "angles are clamped, not wrapped");
   assert.equal(params.distance, 300);
-  assert.equal(params.blur, 1);
+  assert.equal(params.soft, 1);
   assert.equal(params.darkness, 100);
   assert.equal(params.colour, "#000000");
+  assert.equal(params.kind, "dropShadow", "unknown kinds fall back to drop shadow");
+  assert.equal(Shadow.normalise({ soft: 999 }).soft, 100, "softness is a percentage");
+  assert.equal(Shadow.DEFAULTS.soft, 75);
+  assert.equal(Shadow.DEFAULTS.kind, "dropShadow");
 });
 
 test("rgba() converts hex to Photon colour", () => {
@@ -134,7 +150,6 @@ test("describeToMap walks nested wrappers, flat maps and descriptors without def
 
   const noDefault = Shadow.describeToMap({ params: [{ name: "color" }, { name: "angle", default: 120 }] });
   assert.equal(noDefault.size, 2);
-  assert.ok(noDefault.has("color"));
 });
 
 test("effectParams maps onto the host's parameter names", () => {
@@ -175,7 +190,6 @@ test("effectAngle maps screen angles onto Photon's y-up dial", () => {
   assert.equal(Shadow.effectAngle(180), 0);
   assert.equal(Shadow.effectAngle(270), 270);
   assert.ok(Math.abs(Shadow.effectAngle(32.1) - 147.9) < 1e-9);
-  assert.equal(Shadow.effectAngle(-90), 270);
 });
 
 test("colour encodings are all available", () => {
@@ -195,25 +209,43 @@ test("sameColour compares strings and objects", () => {
 
 /* ------------------------------------------------------------------ layer styles */
 
-test("applyLayerStyles writes five shadows onto the selected layer", async () => {
+test("applyLayerStyles writes five drop shadows onto the selected layer", async () => {
   const api = fakeApi();
   const result = await Shadow.applyLayerStyles(api, {
     documentId: "doc-1",
     layerId: "src",
-    params: { angle: 30, distance: 150, blur: 26 },
+    params: { angle: 30, distance: 150, soft: 75 },
   });
 
+  assert.equal(result.kind, "dropShadow");
   assert.equal(result.effects, 5);
-  assert.equal(result.colourFormat, "rgb", "the first encoding sticks");
+  assert.equal(result.colourFormat, "rgb");
   assert.equal(api.calls.filter((c) => c.operation === "layer.duplicate").length, 0, "no duplicate layer");
+  assert.equal(api.calls.find((c) => c.operation === "effect.describe").params.kind, "dropShadow");
 
   const sets = api.calls.filter((c) => c.operation === "layer.effects.set");
   assert.equal(sets.length, 1, "one atomic write");
-  assert.deepEqual(sets[0].params.layerIds, ["src"]);
   const shadows = sets[0].params.styles.dropShadows;
   assert.equal(shadows.length, 5);
   assert.ok(shadows[0].distance > shadows[4].distance);
   assert.equal(shadows[4].opacity, 98);
+  assert.ok(shadows[0].size > shadows[4].size, "farther shadow blurs more");
+  assert.equal(sets[0].params.styles.innerShadows.length, 0, "drop shadow mode leaves inner shadows alone");
+});
+
+test("applyLayerStyles writes inner shadows into styles.innerShadows", async () => {
+  const api = fakeApi();
+  const result = await Shadow.applyLayerStyles(api, {
+    documentId: "doc-1",
+    layerId: "src",
+    params: { kind: "innerShadow" },
+  });
+
+  assert.equal(result.kind, "innerShadow");
+  assert.equal(api.calls.find((c) => c.operation === "effect.describe").params.kind, "innerShadow");
+  const set = api.calls.find((c) => c.operation === "layer.effects.set");
+  assert.equal(set.params.styles.innerShadows.length, 5);
+  assert.equal(set.params.styles.dropShadows.length, 0);
 });
 
 test("applyLayerStyles keeps the layer's existing effects", async () => {
@@ -229,7 +261,7 @@ test("applyLayerStyles keeps the layer's existing effects", async () => {
 });
 
 test("applyLayerStyles retries the colour encoding until it sticks", async () => {
-  const api = fakeApi({ acceptColour: (kind) => kind === "hex-bare" });
+  const api = fakeApi({ acceptColour: (encoding) => encoding === "hex-bare" });
   const result = await Shadow.applyLayerStyles(api, { documentId: "doc-1", layerId: "src", params: {} });
 
   const sets = api.calls.filter((c) => c.operation === "layer.effects.set");

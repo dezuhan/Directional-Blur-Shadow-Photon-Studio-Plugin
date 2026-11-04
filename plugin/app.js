@@ -13,7 +13,8 @@ const el = {
   badge: document.getElementById("badge"),
   angle: document.getElementById("angle"),
   distance: document.getElementById("distance"),
-  blur: document.getElementById("blur"),
+  soft: document.getElementById("soft"),
+  kind: document.getElementById("kind"),
   darkness: document.getElementById("darkness"),
   colour: document.getElementById("colour"),
   preview: document.getElementById("preview"),
@@ -49,7 +50,8 @@ function readParams() {
   return Shadow.normalise({
     angle: el.angle.value,
     distance: el.distance.value,
-    blur: el.blur.value,
+    soft: el.soft.value,
+    kind: el.kind.value,
     colour: el.colour.value,
     darkness: el.darkness.value,
   });
@@ -58,7 +60,8 @@ function readParams() {
 function applyParamsToUi(params) {
   el.angle.value = String(params.angle);
   el.distance.value = String(params.distance);
-  el.blur.value = String(params.blur);
+  el.soft.value = String(params.soft);
+  el.kind.value = params.kind;
   el.darkness.value = String(params.darkness);
   el.colour.value = params.colour;
 }
@@ -106,6 +109,7 @@ function drawPreview() {
   if (!ctx) return;
   const params = readParams();
   const plan = Shadow.planLayers(params);
+  const isInner = plan.params.kind === "innerShadow";
   const centre = canvasCentre();
   const hex = params.colour.replace("#", "");
   const red = parseInt(hex.slice(0, 2), 16);
@@ -121,9 +125,10 @@ function drawPreview() {
   ctx.strokeRect(0.5, 0.5, canvas.width - 1, canvas.height - 1);
   ctx.restore();
 
-  for (const layer of plan.layers) {
-    ctx.save();
-    ctx.filter = "blur(" + Math.max(0.5, layer.blur * SCALE) + "px)";
+  if (!isInner) {
+    for (const layer of plan.layers) {
+      ctx.save();
+      ctx.filter = "blur(" + Math.max(0.5, layer.blur * SCALE) + "px)";
     ctx.fillStyle = "rgba(" + red + "," + green + "," + blue + "," + Math.min(1, layer.opacity).toFixed(3) + ")";
     roundRect(
       ctx,
@@ -133,8 +138,9 @@ function drawPreview() {
       CARD.height,
       10,
     );
-    ctx.fill();
-    ctx.restore();
+      ctx.fill();
+      ctx.restore();
+    }
   }
 
   ctx.save();
@@ -145,6 +151,28 @@ function drawPreview() {
   ctx.lineWidth = 1;
   ctx.stroke();
   ctx.restore();
+
+  if (isInner) {
+    ctx.save();
+    roundRect(ctx, centre.x - CARD.width / 2, centre.y - CARD.height / 2, CARD.width, CARD.height, 10);
+    ctx.clip();
+    for (const layer of plan.layers) {
+      ctx.save();
+      ctx.filter = "blur(" + Math.max(0.5, layer.blur * SCALE) + "px)";
+      ctx.fillStyle = "rgba(" + red + "," + green + "," + blue + "," + Math.min(1, layer.opacity).toFixed(3) + ")";
+      roundRect(
+        ctx,
+        centre.x - CARD.width / 2 + layer.dx * SCALE,
+        centre.y - CARD.height / 2 + layer.dy * SCALE,
+        CARD.width,
+        CARD.height,
+        10,
+      );
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.restore();
+  }
 
   // light handle: the sun sits opposite the shadow
   const reach = Math.min(74, Math.max(26, params.distance * SCALE));
@@ -249,7 +277,8 @@ async function build() {
   console.debug("[directional-shadow]", "format=" + result.colourFormat, result.payloads[0]);
   preview = result;
   markPreview();
-  el.meta.textContent = elapsed + " ms · " + result.effects + " shadows · " + result.colourFormat;
+  const label = result.kind === "innerShadow" ? "inner" : "drop";
+  el.meta.textContent = elapsed + " ms · " + result.effects + " " + label + " shadows · " + result.colourFormat;
   return result;
 }
 
@@ -332,9 +361,10 @@ function wire() {
     canvas.addEventListener("pointerleave", stop);
   }
 
-  for (const input of [el.angle, el.distance, el.blur, el.darkness, el.colour]) {
+  for (const input of [el.angle, el.distance, el.soft, el.darkness, el.colour]) {
     input.addEventListener("input", () => scheduleDraw());
   }
+  el.kind.addEventListener("change", () => scheduleDraw());
   el.preview.addEventListener("click", () => void runPreview());
   el.apply.addEventListener("click", () => void runApply());
   el.removePreview.addEventListener("click", () => void runRemovePreview());

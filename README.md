@@ -20,7 +20,8 @@ A paper stage with a draggable **light handle** (sun with rays) and a floating *
 | `A °` | 0–360 | 30 | Shadow direction: 0° right, 90° down |
 | `D px` | 1–300 | 150 | How far the shadow travels |
 | `Light %` | 1–100 | 100 | Scales every layer's opacity (Figma's Brightness) |
-| `Soft px` | 1–75 | 75 | Blur at the far end |
+| `Soft %` | 1–100 | 75 | Scales the blur of every step |
+| `Type` | Drop shadow / Inner shadow | Drop shadow | Which layer style to write |
 
 Drag the sun to aim: the shadow falls on the **opposite** side, and an `angle° · distance px` chip
 follows the pointer. The bottom bar holds the colour swatch, **Preview** and **Apply**.
@@ -33,14 +34,17 @@ The step count is fixed at 5 and the ramp is the Beautiful Shadows preset (farth
 
 | Step | Offset | Blur | Opacity at Light 100 % |
 | --- | --- | --- | --- |
-| 1 (far) | distance × 1.00 | softness × 1.00 | 2 % |
-| 2 | distance × 0.64 | softness × 0.91 | 15 % |
-| 3 | distance × 0.36 | softness × 0.76 | 50 % |
-| 4 | distance × 0.16 | softness × 0.57 | 85 % |
-| 5 (near) | distance × 0.04 | softness × 0.30 | 98 % |
+| 1 (far) | distance × 1.00 | distance × 0.283 × soft | 2 % |
+| 2 | distance × 0.64 | distance × 0.258 × soft | 15 % |
+| 3 | distance × 0.36 | distance × 0.215 × soft | 50 % |
+| 4 | distance × 0.16 | distance × 0.160 × soft | 85 % |
+| 5 (near) | distance × 0.04 | distance × 0.086 × soft | 98 % |
 
-Opacity is `Light × preset`, so Light 45 % gives 1 / 7 / 23 / 38 / 44 % — the same column the Figma
-plugin shows at Brightness 45 %.
+Every shadow carries its **own** blur, derived from its distance — there is no single blur value.
+At `D 163 px` and `Soft 100 %` the column is 46 / 42 / 35 / 26 / 14 px, which is exactly the Figma
+plugin's blur column; dropping Soft to 50 % halves all five.
+
+Opacity is `Light × preset`, so Light 45 % gives 1 / 7 / 23 / 38 / 44 %.
 
 ## How it talks to Photon
 
@@ -91,6 +95,17 @@ styles snapshot/restore, and the single-write pipeline. A Preview sends **4 oper
 (`documents.active` ×2, `effect.describe`, `layer.effects.set`).
 
 ## Changelog
+
+### 0.13.0
+
+- **Blur per shadow, derived from distance.** Each of the five steps now gets
+  `distance × ratio × soft`, with the Figma ratios 0.283 / 0.258 / 0.215 / 0.160 / 0.086. At
+  `D 163 px` and `Soft 100 %` that reproduces the plugin's 46 / 42 / 35 / 26 / 14 px column.
+- **Soft is a percentage (1–100 %, default 75)**, not pixels: it scales all five blurs at once.
+- New **Type** dropdown: **Drop shadow** (default) or **Inner shadow**. Inner shadows are written to
+  `styles.innerShadows` instead of `styles.dropShadows`, and the canvas preview clips them inside the
+  card.
+- Tests: 19.
 
 ### 0.12.2
 
