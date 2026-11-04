@@ -74,6 +74,12 @@ MIT licensed — see [LICENSE](LICENSE).
 
 ## Changelog
 
+### 0.15.4
+
+- Defined the missing `--sh-radius-control` token. The canonical select trigger/item uses it, so
+  without it Type/Blend rendered with square corners; the dropdown now follows the 7 px control
+  radius like the rest of the design system.
+
 ### 0.15.3
 
 - The Advanced section sits outside the Drop Shadow card and has no box of its own; only a

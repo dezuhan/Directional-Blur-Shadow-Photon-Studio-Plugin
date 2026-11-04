@@ -22,6 +22,7 @@
   --sh-raise: linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 60%);
 
   --sh-radius: 7px;
+  --sh-radius-control: 7px;
   --sh-control-height: 24px;
   --sh-text-base: 12px;
   --sh-leading: 18px;
