@@ -34,8 +34,9 @@ No service, no network, no dependencies.
 Drag the sun to aim the shadow (it falls on the opposite side), then press **Apply**.
 **Remove shadows** restores the styles from before the last Apply; applying again replaces the
 previous result instead of stacking. After an Apply, the **+** button beside **Remove shadows**
-adds another set to the currently selected layer without touching the previous layers, so you can
-select each layer in turn and keep every shadow.
+adds another set to the currently selected layer without touching the previous layers or the
+shadows already on that layer, so you can build several sets or move across layers.
+Every write reads the layer's real styles first, so existing strokes, overlays and glows stay intact.
 
 | Field | Range | Default | Meaning |
 | --- | --- | --- | --- |
@@ -61,7 +62,7 @@ pointing at θ is written as `180 − θ`.
 ## Testing
 
 ```powershell
-node tools/shadow-test.cjs     # 23 tests: presets, angle, payloads, styles
+node tools/shadow-test.cjs     # 24 tests: presets, angle, payloads, styles, inspect snapshot
 node tools/colour-test.cjs     # 6 tests: hex/rgb/hsv maths for the picker
 node tools/ui-check.cjs        # ids and el keys used by app.js exist in index.html
 node tools/bench.cjs           # operation counts and maths timings

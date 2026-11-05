@@ -758,7 +758,7 @@ async function init() {
   setColour(el.colour.value, { quiet: true });
   badge("Ready", "ok");
   setStatus("drag the light, then Preview");
-  addDetail("panel ready · v0.19.0");
+  addDetail("panel ready · v0.19.1");
   await refreshSelection();
   setInterval(refreshSelection, 2000);
   drawPreview();

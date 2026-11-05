@@ -37,10 +37,17 @@ function fakeApi(options) {
   const api = {
     calls,
     documents: {
-      active: async () => ({ id: "doc-1", width: 800, height: 600, layers: layers.map((l) => ({ ...l })) }),
+      active: async () => ({ id: "doc-1", width: 800, height: 600, layers: layers.map((l) => ({ id: l.id })) }),
       execute: async (operation, params) => {
         calls.push({ operation, params });
         if (operation === "effect.describe") return DESCRIBED;
+        if (operation === "inspect") {
+          return {
+            layers: layers.map((l) =>
+              l.styles ? { id: l.id, styles: JSON.parse(JSON.stringify(l.styles)) } : { id: l.id },
+            ),
+          };
+        }
         if (operation === "layer.effects.set") {
           const previous = layer.styles
             ? JSON.parse(JSON.stringify(layer.styles))
@@ -293,6 +300,21 @@ test("applyLayerStyles retries the colour encoding until it sticks", async () =>
   const sets = api.calls.filter((c) => c.operation === "layer.effects.set");
   assert.equal(sets.length, 2, "rgb255 rejected, the 0-1 rgb object accepted");
   assert.equal(result.colourFormat, "rgb");
+});
+
+test("readLayerStyles finds a layer nested inside a group", async () => {
+  const styles = Shadow.emptyStyles();
+  styles.dropShadows = [{ distance: 7 }];
+  const api = {
+    documents: {
+      execute: async (operation) =>
+        operation === "inspect"
+          ? { layers: [{ id: "group", children: [{ id: "src", styles }] }] }
+          : { ok: true },
+    },
+  };
+  const found = await Shadow.readLayerStyles(api, "doc-1", "src");
+  assert.equal(found.dropShadows.length, 1);
 });
 
 test("restoreLayerStyles puts the snapshot back", async () => {

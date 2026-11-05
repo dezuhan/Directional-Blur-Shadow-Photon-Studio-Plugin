@@ -344,6 +344,44 @@
     };
   }
 
+  /** Find one layer inside an inspect snapshot, including layers nested in groups. */
+  function findLayerInSnapshot(node, layerId) {
+    if (!node) return null;
+    if (Array.isArray(node)) {
+      for (const item of node) {
+        const hit = findLayerInSnapshot(item, layerId);
+        if (hit) return hit;
+      }
+      return null;
+    }
+    if (typeof node !== "object") return null;
+    if (node.id === layerId) return node;
+    for (const key of ["layers", "children"]) {
+      if (node[key]) {
+        const hit = findLayerInSnapshot(node[key], layerId);
+        if (hit) return hit;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Read the real layer styles with the read-only `inspect` operation.
+   * `documents.active()` only returns layer ids and names, while `layer.effects.set`
+   * replaces the whole styles object, so this is the only way to keep the effects
+   * a layer already has and to take a snapshot that Remove shadows can restore.
+   */
+  async function readLayerStyles(api, documentId, layerId) {
+    try {
+      const snapshot = await execute(api, documentId, "inspect", {});
+      const documentNode = (snapshot && snapshot.document) || snapshot;
+      const layer = findLayerInSnapshot(documentNode && documentNode.layers, layerId);
+      return stylesFromLayer(layer);
+    } catch {
+      return null;
+    }
+  }
+
   function sameColour(left, right) {
     if (left && right && typeof left === "object" && typeof right === "object") {
       const keys = ["r", "g", "b", "a"];
@@ -371,7 +409,8 @@
 
     const doc = await api.documents.active();
     const layer = (doc.layers || []).find((item) => item.id === layerId);
-    const stylesBefore = stylesFromLayer(layer);
+    // active() does not expose styles, so inspect is the source of the real snapshot.
+    const stylesBefore = (await readLayerStyles(api, documentId, layerId)) || stylesFromLayer(layer);
 
     let described = null;
     try {
@@ -399,8 +438,7 @@
 
       let stored = null;
       try {
-        const after = await api.documents.active();
-        stored = stylesFromLayer((after.layers || []).find((item) => item.id === layerId));
+        stored = await readLayerStyles(api, documentId, layerId);
       } catch {
         stored = null;
       }
@@ -456,6 +494,8 @@
     vectorToAngleDistance,
     emptyStyles,
     stylesFromLayer,
+    findLayerInSnapshot,
+    readLayerStyles,
     sameColour,
     applyLayerStyles,
     restoreLayerStyles,
