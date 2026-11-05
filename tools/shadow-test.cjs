@@ -24,6 +24,7 @@ const DESCRIBED = {
       color: { type: "object" },
       blendMode: { type: "string" },
       enabled: { type: "boolean" },
+      present: { type: "boolean" },
     },
   },
   defaults: {
@@ -36,6 +37,7 @@ const DESCRIBED = {
     color: { space: "rgb", r: 0, g: 0, b: 0 },
     blendMode: "normal",
     enabled: true,
+    present: true,
   },
 };
 
@@ -173,7 +175,8 @@ test("effectParams maps onto the typed effect schema", () => {
   assert.equal(out.opacity, 0.4, "typed effect opacity is a fraction");
   assert.equal(out.spread, 0);
   assert.equal(out.useGlobalLight, false);
-  assert.equal(out.enabled, true, "re-applying turns a hidden effect back on");
+  assert.equal(out.enabled, true, "re-applying turns a removed effect back on");
+  assert.equal(out.present, true, "re-applying puts it back in the layer list");
   assert.equal(out.blendMode, "softLight");
   assert.deepEqual(out.color, {
     space: "rgb",
@@ -247,16 +250,18 @@ test("drop and inner shadows can live on the same layer", async () => {
   assert.equal(api.layer.innerShadows.length, 5);
 });
 
-test("disableLayerShadows hides the five effects without deleting anything", async () => {
+test("disableLayerShadows removes the five effects from the layer list", async () => {
   const api = fakeApi();
   await Shadow.applyLayerStyles(api, { documentId: "doc-1", layerId: "src", params: { kind: "dropShadow" } });
   await Shadow.disableLayerShadows(api, { documentId: "doc-1", layerId: "src", kind: "dropShadow" });
 
-  assert.equal(api.layer.dropShadows.length, 5, "effects stay in the layer style list");
+  assert.equal(api.layer.dropShadows.length, 5, "effects stay in the styles array");
+  assert.equal(api.layer.dropShadows.filter((effect) => effect.present === false).length, 5);
   assert.equal(api.layer.dropShadows.filter((effect) => effect.enabled === false).length, 5);
 
   await Shadow.applyLayerStyles(api, { documentId: "doc-1", layerId: "src", params: { kind: "dropShadow" } });
-  assert.equal(api.layer.dropShadows.filter((effect) => effect.enabled === false).length, 0, "apply turns them back on");
+  assert.equal(api.layer.dropShadows.filter((effect) => effect.present === false).length, 0, "apply puts them back");
+  assert.equal(api.layer.dropShadows.filter((effect) => effect.enabled === false).length, 0);
   assert.equal(api.layer.dropShadows.length, 5);
 });
 

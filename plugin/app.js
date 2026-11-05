@@ -692,6 +692,7 @@ async function runAddShadow() {
 
 async function runRemovePreview() {
   if (busy || !preview) return;
+  const kind = preview.kind;
   setBusy(true);
   try {
     const doc = await api.documents.active();
@@ -699,13 +700,14 @@ async function runRemovePreview() {
       await Shadow.disableLayerShadows(api, {
         documentId: doc.id,
         layerId: preview.layerIds[0],
-        kind: preview.kind,
+        kind,
       });
     }
     preview = null;
     markPreview();
     badge("Ready", "ok");
-    setStatus("shadows hidden; apply again to bring them back");
+    setStatus("shadows removed from the layer");
+    addDetail("removed the " + kindLabel(kind) + " shadows from the layer list");
   } catch (error) {
     badge("Failed", "danger");
     setStatus(errText(error));
@@ -780,7 +782,7 @@ async function init() {
   setColour(el.colour.value, { quiet: true });
   badge("Ready", "ok");
   setStatus("drag the light, then Preview");
-  addDetail("panel ready · v0.20.0");
+  addDetail("panel ready · v0.20.1");
   await refreshSelection();
   setInterval(refreshSelection, 2000);
   drawPreview();

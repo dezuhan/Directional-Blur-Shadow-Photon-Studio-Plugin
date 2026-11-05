@@ -35,8 +35,8 @@ Drag the sun to aim the shadow (it falls on the opposite side), then press **App
 **Apply** writes the five shadows of the selected **Type** and leaves every other effect on the layer
 alone, so applying again updates that type in place instead of stacking. The **+** button beside
 **Remove shadows** adds the other type: with Type set to Drop it adds an inner shadow, and with Type
-set to Inner it adds a drop shadow, so the same layer can keep both. **Remove shadows** hides the five
-shadows of the last written type; apply again to bring them back.
+set to Inner it adds a drop shadow, so the same layer can keep both. **Remove shadows** removes the
+five shadows of the last written type from the layer; applying again adds them back.
 
 | Field | Range | Default | Meaning |
 | --- | --- | --- | --- |
@@ -74,8 +74,9 @@ calls, one per shadow step.
 ## Limits
 
 - Use **Apply** to commit; the canvas preview is an approximation, not a render of the result.
-- Photon has no operation that deletes a single layer effect, so **Remove shadows** sets the five
-  effects of the last written type to `enabled: false`. The effects stay in the Layer Style list and
-  applying again turns them back on. Only that type is hidden; the other shadow type stays visible.
+- Photon has no operation that deletes a single layer effect, so **Remove shadows** clears the
+  `present` and `enabled` flags of the five effects it last wrote. Photon drops them from the Layers
+  panel and the render; applying again patches them back. Only that type is removed, the other
+  shadow type stays.
 
 MIT licensed — see [LICENSE](LICENSE).

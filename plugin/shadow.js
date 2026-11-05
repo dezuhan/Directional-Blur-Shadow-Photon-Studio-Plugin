@@ -303,6 +303,7 @@
     const spreadName = find([/spread/]);
     const globalName = find([/use.*global/]);
     const enabledName = find([/^enabled$/]);
+    const presentName = find([/^present$/]);
 
     if (distanceName) out[distanceName] = distance;
     if (angleName) out[angleName] = effectAngle(params.angle);
@@ -310,6 +311,7 @@
     if (spreadName) out[spreadName] = 0;
     if (globalName) out[globalName] = false;
     if (enabledName) out[enabledName] = true;
+    if (presentName) out[presentName] = true;
 
     if (opacityName) {
       const meta = map.get(opacityName.toLowerCase());
@@ -368,15 +370,16 @@
   }
 
   /**
-   * Hide the five shadows of one kind. The plugin API cannot delete a single effect, so this
-   * patches `enabled: false`; a later apply turns them back on.
+   * Remove the five shadows of one kind from the layer list. The plugin API has no single-effect
+   * delete, so this clears the `present` and `enabled` flags: Photon drops the effects from the
+   * Layers panel and the render, and a later apply patches them back on.
    */
   async function disableLayerShadows(api, options) {
     const steps = [];
     for (let index = 0; index < STEPS; index += 1) {
       steps.push({
         operation: "layer.effect.set",
-        params: { layerIds: [options.layerId], kind: options.kind, index, params: { enabled: false } },
+        params: { layerIds: [options.layerId], kind: options.kind, index, params: { enabled: false, present: false } },
       });
     }
 
