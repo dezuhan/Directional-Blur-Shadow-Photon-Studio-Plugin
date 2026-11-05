@@ -253,11 +253,16 @@ test("drop and inner shadows can live on the same layer", async () => {
 test("effectGroups lays out the 3D mode", () => {
   assert.equal(Shadow.normalise({ kind: "3dShadow" }).kind, "3dShadow");
   const params = Shadow.normalise({ angle: 30, colour: "#000000" });
-  const groups = Shadow.effectGroups("3dShadow", params, "#ffffff", {
-    lighting: "screen",
-    dropShadow: "multiply",
-    innerShadow: "overlay",
-  });
+  const groups = Shadow.effectGroups(
+    "3dShadow",
+    params,
+    { dropShadow: "#ff0000", innerShadow: "#00ff00", lighting: "#ffffff" },
+    {
+      lighting: "screen",
+      dropShadow: "multiply",
+      innerShadow: "overlay",
+    },
+  );
   assert.deepEqual(
     groups.map((group) => [group.kind, group.offset, group.role]),
     [
@@ -271,6 +276,11 @@ test("effectGroups lays out the 3D mode", () => {
     ["multiply", "overlay", "screen"],
     "each bevel keeps its own blend mode",
   );
+  assert.deepEqual(
+    groups.map((group) => group.colour),
+    ["#ff0000", "#00ff00", "#ffffff"],
+    "each bevel keeps its own colour",
+  );
   assert.equal(groups[1].angle, 210, "dark bevel points away from the light");
   assert.equal(groups[2].angle, 30, "lighting ramp points at the light");
   assert.equal(groups[2].colour, "#ffffff");
@@ -282,7 +292,7 @@ test("3D mode writes a drop ramp and a dark plus light inner ramp", async () => 
     documentId: "doc-1",
     layerId: "src",
     params: { kind: "3dShadow", angle: 30, colour: "#000000" },
-    lightingColour: "#ffffff",
+    colours: { dropShadow: "#ff0000", innerShadow: "#00ff00", lighting: "#0000ff" },
     blends: { lighting: "screen", dropShadow: "multiply", innerShadow: "overlay" },
   });
 
@@ -300,12 +310,15 @@ test("3D mode writes a drop ramp and a dark plus light inner ramp", async () => 
   }
   assert.deepEqual(drop.map((step) => step.params.index), [0, 1, 2, 3, 4]);
   assert.deepEqual(inner.map((step) => step.params.index), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  for (const step of drop) {
+    assert.deepEqual(step.params.params.color, { space: "rgb", r: 1, g: 0, b: 0 }, "drop ramp uses the drop colour");
+  }
   for (const step of inner.filter((entry) => entry.params.index >= 5)) {
-    assert.deepEqual(step.params.params.color, { space: "rgb", r: 1, g: 1, b: 1 }, "light ramp uses the lighting colour");
+    assert.deepEqual(step.params.params.color, { space: "rgb", r: 0, g: 0, b: 1 }, "light ramp uses the lighting colour");
     assert.equal(step.params.params.angle, 150, "lighting ramp uses the light dial side");
   }
   for (const step of inner.filter((entry) => entry.params.index < 5)) {
-    assert.equal(step.params.params.color.r, 0, "dark ramp uses the shadow colour");
+    assert.deepEqual(step.params.params.color, { space: "rgb", r: 0, g: 1, b: 0 }, "dark ramp uses the inner colour");
     assert.equal(step.params.params.angle, 330, "dark ramp sits opposite the light");
   }
   assert.equal(api.layer.dropShadows.length, 5);
@@ -338,19 +351,25 @@ test("disableLayerShadows removes all three 3D ramps", async () => {
   assert.equal(api.layer.innerShadows.filter((effect) => effect.present === false).length, 10);
 });
 
-test("2D modes write their own blend slot", async () => {
+test("2D modes write their own blend and colour slot", async () => {
   const api = fakeApi();
   const blends = { lighting: "screen", dropShadow: "multiply", innerShadow: "overlay" };
+  const colours = { dropShadow: "#ff0000", innerShadow: "#00ff00", lighting: "#0000ff" };
   await Shadow.applyLayerStyles(api, {
     documentId: "doc-1",
     layerId: "src",
     params: { kind: "dropShadow" },
     blends,
+    colours,
   });
   let batch = api.calls.find((call) => call.operation === "batch");
   assert.ok(
     batch.params.steps.every((step) => step.params.params.blendMode === "multiply"),
     "drop shadow mode uses Blend DS",
+  );
+  assert.ok(
+    batch.params.steps.every((step) => step.params.params.color.r === 1),
+    "drop shadow mode uses the drop colour",
   );
 
   api.calls.length = 0;
@@ -359,11 +378,16 @@ test("2D modes write their own blend slot", async () => {
     layerId: "src",
     params: { kind: "innerShadow" },
     blends,
+    colours,
   });
   batch = api.calls.find((call) => call.operation === "batch");
   assert.ok(
     batch.params.steps.every((step) => step.params.params.blendMode === "overlay"),
     "inner shadow mode uses Blend IS",
+  );
+  assert.ok(
+    batch.params.steps.every((step) => step.params.params.color.g === 1),
+    "inner shadow mode uses the inner colour",
   );
 });
 

@@ -118,12 +118,20 @@
         <button id="cardSwatchBtn" class="swatch square" type="button" title="Preview box colour">
           <span id="cardSwatchDot" class="swatch-dot"></span>
         </button>
-        <button id="swatchBtn" class="swatch" type="button" title="Shadow colour">
+        <button id="swatchBtn" class="swatch" type="button" title="Drop shadow colour">
           <span id="swatchDot" class="swatch-dot"></span>
         </button>
-        <button id="lightSwatchBtn" class="swatch lighting" type="button" title="Lighting colour">
-          <span id="lightSwatchDot" class="swatch-dot"></span>
-        </button>
+        <div id="colours3d" hidden>
+          <button id="innerSwatchBtn" class="swatch" type="button" title="Inner shadow colour">
+            <span id="innerSwatchDot" class="swatch-dot"></span>
+          </button>
+          <button id="dropSwatchBtn" class="swatch" type="button" title="Drop shadow colour">
+            <span id="dropSwatchDot" class="swatch-dot"></span>
+          </button>
+          <button id="lightSwatchBtn" class="swatch lighting" type="button" title="Lighting colour">
+            <span id="lightSwatchDot" class="swatch-dot"></span>
+          </button>
+        </div>
         <input id="colour" type="color" value="#000000" hidden />
         <button id="apply" class="button primary" type="button">Apply</button>
       </div>
@@ -149,7 +157,7 @@
 
 
       <footer class="panel-footer">
-        <span id="version">v0.22.0</span>
+        <span id="version">v0.23.0</span>
         <div class="footer-actions">
           <button id="detailsBtn" class="link-button" type="button">Details</button>
           <button id="serviceBtn" class="link-button" type="button">Check service</button>

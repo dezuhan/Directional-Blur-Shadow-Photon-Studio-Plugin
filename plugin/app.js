@@ -43,6 +43,11 @@ const el = {
   previewCanvas: document.getElementById("previewCanvas"),
   swatchBtn: document.getElementById("swatchBtn"),
   swatchDot: document.getElementById("swatchDot"),
+  colours3d: document.getElementById("colours3d"),
+  innerSwatchBtn: document.getElementById("innerSwatchBtn"),
+  innerSwatchDot: document.getElementById("innerSwatchDot"),
+  dropSwatchBtn: document.getElementById("dropSwatchBtn"),
+  dropSwatchDot: document.getElementById("dropSwatchDot"),
   lightSwatchBtn: document.getElementById("lightSwatchBtn"),
   lightSwatchDot: document.getElementById("lightSwatchDot"),
   picker: document.getElementById("picker"),
@@ -61,7 +66,8 @@ let drawFrame = null;
 let lastParams = { ...Shadow.DEFAULTS };
 let hsv = { h: 0, s: 0, v: 0 };
 let objectColour = "#f7f7f7";
-let lightingColour = Shadow ? Shadow.DEFAULT_LIGHTING : "#ffffff";
+// 3D mode keeps one colour per bevel component; the 2D modes reuse the matching slot.
+let colours = { dropShadow: "#000000", innerShadow: "#000000", lighting: Shadow ? Shadow.DEFAULT_LIGHTING : "#ffffff" };
 // 3D mode keeps one blend per bevel component; the 2D modes reuse the matching slot.
 let blends = { lighting: "normal", dropShadow: "normal", innerShadow: "normal" };
 
@@ -294,7 +300,8 @@ function drawPreview() {
   const is3d = plan.params.kind === "3dShadow";
   const centre = canvasCentre();
   const card = cardRect();
-  const hex = params.colour.replace("#", "");
+  const dropColour = is3d ? colours.dropShadow : params.colour;
+  const hex = dropColour.replace("#", "");
   const red = parseInt(hex.slice(0, 2), 16);
   const green = parseInt(hex.slice(2, 4), 16);
   const blue = parseInt(hex.slice(4, 6), 16);
@@ -370,8 +377,8 @@ function drawPreview() {
       kind: "innerShadow",
       angle: (params.angle + 180) % 360,
     });
-    drawInnerRamp(darkParams, params.colour, blends.innerShadow);
-    drawInnerRamp(params, lightingColour, blends.lighting);
+    drawInnerRamp(darkParams, colours.innerShadow, blends.innerShadow);
+    drawInnerRamp(params, colours.lighting, blends.lighting);
   }
 
   // light handle: the sun sits opposite the shadow. Distance 300 px maps to 126 canvas px
@@ -473,21 +480,60 @@ let pickerBefore = null;
 function syncSwatches() {
   el.swatchDot.style.background = el.colour.value;
   el.cardSwatchDot.style.background = objectColour;
-  el.lightSwatchDot.style.background = lightingColour;
+  el.innerSwatchDot.style.background = colours.innerShadow;
+  el.dropSwatchDot.style.background = colours.dropShadow;
+  el.lightSwatchDot.style.background = colours.lighting;
 }
 
 function setColour(hex, options) {
   const normalised = Colour.normaliseHex(hex);
   if (!normalised) return;
   if (pickerTarget === "card") objectColour = normalised;
-  else if (pickerTarget === "lighting") lightingColour = normalised;
-  else el.colour.value = normalised;
+  else if (pickerTarget === "lighting") colours.lighting = normalised;
+  else if (pickerTarget === "dropShadow") colours.dropShadow = normalised;
+  else if (pickerTarget === "innerShadow") colours.innerShadow = normalised;
+  else {
+    el.colour.value = normalised;
+    colours[el.kind.value] = normalised;
+  }
   syncSwatches();
   if (el.hexInput !== document.activeElement) el.hexInput.value = normalised;
   const rgb = Colour.hexToRgb(normalised);
   hsv = Colour.rgbToHsv(rgb);
   drawPicker();
   if (!(options && options.quiet)) scheduleDraw();
+}
+
+function pickerValue(target) {
+  if (target === "card") return objectColour;
+  if (target === "lighting") return colours.lighting;
+  if (target === "dropShadow") return colours.dropShadow;
+  if (target === "innerShadow") return colours.innerShadow;
+  return el.colour.value;
+}
+
+function pickerTitle(target) {
+  if (target === "card") return "Box colour";
+  if (target === "lighting") return "Lighting colour";
+  if (target === "dropShadow") return "Drop shadow colour";
+  if (target === "innerShadow") return "Inner shadow colour";
+  return el.kind.value === "innerShadow" ? "Inner shadow colour" : "Drop shadow colour";
+}
+
+/** 2D modes show one shadow swatch, 3D shows one per bevel component. */
+function syncColourUi() {
+  const is3d = el.kind.value === "3dShadow";
+  el.swatchBtn.hidden = is3d;
+  el.colours3d.hidden = !is3d;
+  if (!is3d) {
+    el.colour.value = colours[el.kind.value] || "#000000";
+    el.swatchBtn.title = pickerTitle("shadow");
+    el.swatchBtn.setAttribute("aria-label", pickerTitle("shadow"));
+  }
+}
+
+function activeColours() {
+  return el.kind.value === "3dShadow" ? { ...colours } : { ...colours, [el.kind.value]: el.colour.value };
 }
 
 function syncPickerCanvas(canvas) {
@@ -572,11 +618,12 @@ function pickFromHue(event) {
 }
 
 function openPicker(target) {
-  pickerTarget = target === "card" ? "card" : target === "lighting" ? "lighting" : "shadow";
-  pickerBefore =
-    pickerTarget === "card" ? objectColour : pickerTarget === "lighting" ? lightingColour : el.colour.value;
-  el.pickerTitle.textContent =
-    pickerTarget === "card" ? "Box colour" : pickerTarget === "lighting" ? "Lighting colour" : "Shadow colour";
+  pickerTarget =
+    target === "card" || target === "lighting" || target === "dropShadow" || target === "innerShadow"
+      ? target
+      : "shadow";
+  pickerBefore = pickerValue(pickerTarget);
+  el.pickerTitle.textContent = pickerTitle(pickerTarget);
   const current = Colour.normaliseHex(pickerBefore) || "#000000";
   hsv = Colour.rgbToHsv(Colour.hexToRgb(current));
   if (el.hexInput !== document.activeElement) el.hexInput.value = current;
@@ -596,11 +643,17 @@ function wireColourPicker() {
   };
   el.swatchBtn.addEventListener("click", () => toggle("shadow"));
   el.cardSwatchBtn.addEventListener("click", () => toggle("card"));
+  el.innerSwatchBtn.addEventListener("click", () => toggle("innerShadow"));
+  el.dropSwatchBtn.addEventListener("click", () => toggle("dropShadow"));
   el.lightSwatchBtn.addEventListener("click", () => toggle("lighting"));
   el.colourOk.addEventListener("click", closePicker);
   el.colourCancel.addEventListener("click", () => {
     const fallback =
-      pickerTarget === "card" ? "#f7f7f7" : pickerTarget === "lighting" ? Shadow.DEFAULT_LIGHTING : Shadow.DEFAULTS.colour;
+      pickerTarget === "card"
+        ? "#f7f7f7"
+        : pickerTarget === "lighting"
+          ? Shadow.DEFAULT_LIGHTING
+          : Shadow.DEFAULTS.colour;
     setColour(pickerBefore || fallback);
     closePicker();
   });
@@ -694,7 +747,7 @@ async function build() {
     documentId: doc.id,
     layerId,
     params: lastParams,
-    lightingColour,
+    colours: activeColours(),
     blends: activeBlends(),
     // only clean up the old mode when it wrote to this same layer
     previousKind: preview && preview.layerIds[0] === layerId ? preview.kind : null,
@@ -717,7 +770,7 @@ async function runApply() {
     lastParams = readParams();
     setStatus("adding shadows…");
     await build();
-    await api.settings.set({ shadow: lastParams, blends, preview: { objectColour, lightingColour } }).catch(() => {});
+    await api.settings.set({ shadow: lastParams, blends, colours: activeColours(), preview: { objectColour } }).catch(() => {});
     badge("Applied", "ok");
     setStatus(kindLabel(lastParams.kind) + " shadow applied to the selected layer");
   } catch (error) {
@@ -743,7 +796,7 @@ async function runAddShadow() {
     lastParams = readParams();
     setStatus("adding " + Shadow.STEPS + " " + kindLabel(target) + " shadows…");
     await build();
-    await api.settings.set({ shadow: lastParams, blends, preview: { objectColour, lightingColour } }).catch(() => {});
+    await api.settings.set({ shadow: lastParams, blends, colours: activeColours(), preview: { objectColour } }).catch(() => {});
     badge("Applied", "ok");
     setStatus(kindLabel(target) + " shadow added; the " + kindLabel(previousKind) + " shadow stays");
     addDetail("added " + target + " shadows beside the existing " + previousKind + " shadows");
@@ -823,6 +876,7 @@ function wire() {
     scheduleDraw();
     updateAddLabel();
     syncBlendUi();
+    syncColourUi();
   });
   el.blend.addEventListener("change", () => {
     if (el.kind.value !== "3dShadow") blends[el.kind.value] = el.blend.value;
@@ -866,21 +920,29 @@ async function init() {
     dropShadow: validBlend(storedBlends.dropShadow || legacyBlend),
     innerShadow: validBlend(storedBlends.innerShadow || legacyBlend),
   };
+  const storedColours = stored.colours && typeof stored.colours === "object" ? stored.colours : {};
+  const legacyColour = Colour.normaliseHex(storedShadow.colour) || Shadow.DEFAULTS.colour;
+  colours = {
+    dropShadow: Colour.normaliseHex(storedColours.dropShadow) || legacyColour,
+    innerShadow: Colour.normaliseHex(storedColours.innerShadow) || legacyColour,
+    lighting:
+      Colour.normaliseHex(storedColours.lighting) ||
+      (stored.preview && Colour.normaliseHex(stored.preview.lightingColour)) ||
+      Shadow.DEFAULT_LIGHTING,
+  };
   applyParamsToUi(Shadow.normalise({ ...Shadow.DEFAULTS, ...storedShadow }));
   cloneBlendOptions(el.blendLight);
   cloneBlendOptions(el.blendDrop);
   cloneBlendOptions(el.blendInner);
   syncBlendUi();
+  syncColourUi();
   updateAddLabel();
   const rememberedCard = stored.preview && Colour.normaliseHex(stored.preview.objectColour);
   objectColour = rememberedCard || "#f7f7f7";
-  const rememberedLighting = stored.preview && Colour.normaliseHex(stored.preview.lightingColour);
-  lightingColour = rememberedLighting || Shadow.DEFAULT_LIGHTING;
-  setColour(el.colour.value, { quiet: true });
   syncSwatches();
   badge("Ready", "ok");
   setStatus("drag the light, then Apply");
-  addDetail("panel ready · v0.22.0");
+  addDetail("panel ready · v0.23.0");
   await refreshSelection();
   setInterval(refreshSelection, 2000);
   drawPreview();

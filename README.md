@@ -39,11 +39,11 @@ alone, so applying again updates that type in place instead of stacking. The **+
 Type set to Inner it adds a drop shadow, so the same layer can keep both.
 
 **3D shadow** writes three ramps in one Apply: a drop shadow, a dark inner shadow on the side away
-from the light, and a light inner shadow on the light side. The round swatch after the shadow swatch
-picks the **lighting colour** for that bevel; it is remembered with the other panel settings. In 3D
-mode the single Blend row becomes three: **Blend L** for the lighting ramp, **Blend DS** for the drop
-shadow ramp and **Blend IS** for the inner bevel ramp. The **+** button is disabled in 3D mode because
-both types are already part of it.
+from the light, and a light inner shadow on the light side. In 3D mode the swatch row shows one
+colour per component: inner shadow colour, drop shadow colour and lighting colour, each with its own
+picker and remembered with the other panel settings. The single Blend row also becomes three:
+**Blend L** for the lighting ramp, **Blend DS** for the drop shadow ramp and **Blend IS** for the
+inner bevel ramp. The **+** button is disabled in 3D mode because both types are already part of it.
 
 **Remove shadows** removes the ramps of the last written mode from the layer; applying again adds
 them back.
@@ -60,8 +60,10 @@ them back.
 | `Blend DS` | Photoshop blend list | Normal | 3D mode: blend of the drop shadow ramp |
 | `Blend IS` | Photoshop blend list | Normal | 3D mode: blend of the inner shadow ramp |
 | square swatch | custom picker | `#f7f7f7` | Preview box colour; also opens by clicking the white card |
-| round swatch | custom picker | black | Shadow colour |
-| ringed round swatch | custom picker | white | Lighting colour for the 3D bevel |
+| round swatch | custom picker | black | 2D modes: colour of the selected shadow type |
+| inner swatch | custom picker | black | 3D mode: inner shadow colour |
+| drop swatch | custom picker | black | 3D mode: drop shadow colour |
+| ringed round swatch | custom picker | white | 3D mode: lighting colour |
 | white card | click | `#f7f7f7` | Opens the box-colour picker |
 | `+` button | click | always | Adds the shadow type that is not selected; disabled in 3D mode |
 

@@ -346,8 +346,14 @@
   /* ------------------------------------------------------------------ layer effects */
 
   /** Group descriptors for one mode, with the angle, colour and blend each ramp uses. */
-  function effectGroups(kind, params, lightingColour, blends) {
-    const lighting = /^#[0-9a-f]{6}$/i.test(String(lightingColour || "")) ? lightingColour : DEFAULT_LIGHTING;
+  function effectGroups(kind, params, colours, blends) {
+    const palette = colours || {};
+    const lighting = /^#[0-9a-f]{6}$/i.test(String(palette.lighting || "")) ? palette.lighting : DEFAULT_LIGHTING;
+    const colourFor = (group) => {
+      if (group.role === "light") return lighting;
+      const value = group.kind === "dropShadow" ? palette.dropShadow : palette.innerShadow;
+      return /^#[0-9a-f]{6}$/i.test(String(value || "")) ? value : params.colour;
+    };
     const modes = blends || {};
     const blendFor = (group) => {
       if (group.kind === "dropShadow") return modes.dropShadow || params.blend;
@@ -356,7 +362,7 @@
     };
     return (GROUP_LAYOUT[kind] || GROUP_LAYOUT.dropShadow).map((group) => ({
       ...group,
-      colour: group.role === "light" ? lighting : params.colour,
+      colour: colourFor(group),
       blend: blendFor(group),
       angle: (((Number(params.angle) + (group.angleOffset || 0)) % 360) + 360) % 360,
     }));
@@ -390,12 +396,12 @@
     const layerId = options.layerId;
     const plan = planLayers(options.params);
     const kind = plan.params.kind;
-    const groups = effectGroups(kind, plan.params, options.lightingColour, options.blends);
+    const groups = effectGroups(kind, plan.params, options.colours, options.blends);
     const steps = [];
 
     if (options.previousKind && options.previousKind !== kind) {
       const keep = new Set(groups.map((group) => group.kind + ":" + group.offset));
-      for (const group of effectGroups(options.previousKind, plan.params, options.lightingColour, options.blends)) {
+      for (const group of effectGroups(options.previousKind, plan.params, options.colours, options.blends)) {
         if (!keep.has(group.kind + ":" + group.offset)) steps.push(...disableStepsFor(layerId, group));
       }
     }
@@ -440,7 +446,7 @@
     }
 
     await batch(api, documentId, "Plugin: " + kind, steps, revision);
-    return { layerIds: [layerId], kind, effects, lightingColour: options.lightingColour || DEFAULT_LIGHTING };
+    return { layerIds: [layerId], kind, effects };
   }
 
   /**
@@ -450,7 +456,7 @@
    */
   async function disableLayerShadows(api, options) {
     const plan = planLayers(options.params || {});
-    const groups = effectGroups(options.kind || plan.params.kind, plan.params, options.lightingColour);
+    const groups = effectGroups(options.kind || plan.params.kind, plan.params, options.colours, options.blends);
     const steps = [];
     for (const group of groups) steps.push(...disableStepsFor(options.layerId, group));
 
