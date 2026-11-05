@@ -605,6 +605,13 @@ select.input option {
   color: var(--sh-text);
 }
 
+/* square icon button beside Remove shadows: adds to another layer without dropping the last one */
+.button.icon-only {
+  flex: none;
+  width: 24px;
+  padding: 0;
+}
+
 .panel-footer {
   display: flex;
   align-items: center;

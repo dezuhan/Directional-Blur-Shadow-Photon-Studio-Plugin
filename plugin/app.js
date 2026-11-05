@@ -32,7 +32,7 @@ const el = {
   colour: document.getElementById("colour"),
   apply: document.getElementById("apply"),
   removePreview: document.getElementById("removePreview"),
-  hint: document.getElementById("hint"),
+  addShadow: document.getElementById("addShadow"),
   status: document.getElementById("status"),
   meta: document.getElementById("meta"),
   previewCanvas: document.getElementById("previewCanvas"),
@@ -163,6 +163,7 @@ function setBusy(value) {
   busy = value;
   el.apply.disabled = value;
   el.removePreview.disabled = value;
+  el.addShadow.disabled = value;
 }
 
 /* ---------- direction preview ---------- */
@@ -603,6 +604,7 @@ async function selectedLayer() {
 
 function markPreview() {
   el.removePreview.hidden = !preview;
+  el.addShadow.hidden = !preview;
 }
 
 async function dropPreview() {
@@ -652,6 +654,32 @@ async function runApply() {
     badge("Failed", "danger");
     setStatus(errText(error));
     addDetail("apply failed: " + errText(error));
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function runAddShadow() {
+  if (busy || !preview) return;
+  setBusy(true);
+  badge("Working…", "busy");
+  const previous = preview;
+  preview = null; // keep the written shadows; this Apply adds to the selected layer instead of replacing
+  markPreview();
+  try {
+    lastParams = readParams();
+    setStatus("adding " + Shadow.STEPS + " shadows…");
+    await build();
+    await api.settings.set({ shadow: lastParams, preview: { objectColour } }).catch(() => {});
+    badge("Applied", "ok");
+    setStatus("shadow added; select another layer to add the next one");
+    addDetail("added shadows to the selected layer");
+  } catch (error) {
+    preview = previous;
+    markPreview();
+    badge("Failed", "danger");
+    setStatus(errText(error));
+    addDetail("add failed: " + errText(error));
   } finally {
     setBusy(false);
   }
@@ -714,6 +742,7 @@ function wire() {
     if (event.target === el.detailsOverlay) el.detailsOverlay.hidden = true;
   });
   el.removePreview.addEventListener("click", () => void runRemovePreview());
+  el.addShadow.addEventListener("click", () => void runAddShadow());
 }
 
 async function init() {
@@ -729,7 +758,7 @@ async function init() {
   setColour(el.colour.value, { quiet: true });
   badge("Ready", "ok");
   setStatus("drag the light, then Preview");
-  addDetail("panel ready · v0.18.1");
+  addDetail("panel ready · v0.19.0");
   await refreshSelection();
   setInterval(refreshSelection, 2000);
   drawPreview();

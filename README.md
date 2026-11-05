@@ -33,12 +33,14 @@ No service, no network, no dependencies.
 
 Drag the sun to aim the shadow (it falls on the opposite side), then press **Apply**.
 **Remove shadows** restores the styles from before the last Apply; applying again replaces the
-previous result instead of stacking.
+previous result instead of stacking. After an Apply, the **+** button beside **Remove shadows**
+adds another set to the currently selected layer without touching the previous layers, so you can
+select each layer in turn and keep every shadow.
 
 | Field | Range | Default | Meaning |
 | --- | --- | --- | --- |
-| `A °` | 0–360 | 30 | Shadow direction: 0° right, 90° down |
-| `D px` | 1–300 | 150 | How far the shadow travels |
+| `Angle` | 0–360 | 30 | Shadow direction: 0° right, 90° down |
+| `Distance` | 1–300 | 150 | How far the shadow travels |
 | `Light %` | 1–100 | 100 | Scales every layer's opacity |
 | `Soft %` | 1–100 | 75 | Scales the blur of every step |
 | `Type` | Drop / Inner shadow | Drop | Which layer style to write |
@@ -46,6 +48,7 @@ previous result instead of stacking.
 | square swatch | custom picker | `#f7f7f7` | Preview box colour; also opens by clicking the white card |
 | round swatch | custom picker | black | Shadow colour |
 | white card | click | `#f7f7f7` | Opens the box-colour picker |
+| `+` button | click | hidden | Applies the current shadow to the selected layer without removing the previous shadows; appears after an Apply |
 
 Five fixed steps (farthest → nearest). Offsets are `distance × 1 / .64 / .36 / .16 / .04`, opacities
 `lighting × 2 / 15 / 50 / 85 / 98 %`, and each shadow has its **own blur**:
@@ -58,8 +61,9 @@ pointing at θ is written as `180 − θ`.
 ## Testing
 
 ```powershell
-node tools/shadow-test.cjs     # 21 tests: presets, angle, payloads, styles
+node tools/shadow-test.cjs     # 23 tests: presets, angle, payloads, styles
 node tools/colour-test.cjs     # 6 tests: hex/rgb/hsv maths for the picker
+node tools/ui-check.cjs        # ids and el keys used by app.js exist in index.html
 node tools/bench.cjs           # operation counts and maths timings
 ```
 
@@ -69,11 +73,19 @@ An Apply sends four operations: `documents.active` ×2, `effect.describe`, `laye
 
 - Use **Apply** to commit; the canvas preview is an approximation, not a render of the result.
 - Layer styles cannot be removed individually by the plugin API, so **Remove shadows** restores the
-  whole styles snapshot.
+  whole styles snapshot of the last Apply or **+**. The **+** button itself never restores the
+  previous layer, so build across layers first and undo only the last added set.
 
 MIT licensed — see [LICENSE](LICENSE).
 
 ## Changelog
+
+### 0.19.0
+
+- Added a **+** button beside **Remove shadows**: it applies the current shadow to the selected layer
+  without restoring the previous layer, so shadows can be added across several layers one after
+  another. **Remove shadows** still restores only the last added set.
+- Added a static UI check (`tools/ui-check.cjs`).
 
 ### 0.18.5
 
