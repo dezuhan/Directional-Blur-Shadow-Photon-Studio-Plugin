@@ -272,6 +272,11 @@ input:focus-visible {
   border-radius: 7px;
 }
 
+/* lighting colour: round swatch with a soft outer ring so it reads apart from the shadow swatch */
+.swatch.lighting .swatch-dot {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22), 0 0 0 1px rgba(255, 255, 255, 0.28);
+}
+
 .picker-title {
   color: var(--sh-muted);
   font-size: 10px;

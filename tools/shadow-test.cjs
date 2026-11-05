@@ -250,6 +250,77 @@ test("drop and inner shadows can live on the same layer", async () => {
   assert.equal(api.layer.innerShadows.length, 5);
 });
 
+test("effectGroups lays out the 3D mode", () => {
+  assert.equal(Shadow.normalise({ kind: "3dShadow" }).kind, "3dShadow");
+  const params = Shadow.normalise({ angle: 30, colour: "#000000" });
+  const groups = Shadow.effectGroups("3dShadow", params, "#ffffff");
+  assert.deepEqual(
+    groups.map((group) => [group.kind, group.offset, group.role]),
+    [
+      ["dropShadow", 0, "shadow"],
+      ["innerShadow", 0, "shadow"],
+      ["innerShadow", 5, "light"],
+    ],
+  );
+  assert.equal(groups[1].angle, 210, "dark bevel points away from the light");
+  assert.equal(groups[2].angle, 30, "lighting ramp points at the light");
+  assert.equal(groups[2].colour, "#ffffff");
+});
+
+test("3D mode writes a drop ramp and a dark plus light inner ramp", async () => {
+  const api = fakeApi();
+  const result = await Shadow.applyLayerStyles(api, {
+    documentId: "doc-1",
+    layerId: "src",
+    params: { kind: "3dShadow", angle: 30, colour: "#000000" },
+    lightingColour: "#ffffff",
+  });
+
+  assert.equal(result.effects, 15);
+  const batch = api.calls.find((call) => call.operation === "batch");
+  assert.equal(batch.params.steps.length, 15);
+  const drop = batch.params.steps.filter((step) => step.params.kind === "dropShadow");
+  const inner = batch.params.steps.filter((step) => step.params.kind === "innerShadow");
+  assert.deepEqual(drop.map((step) => step.params.index), [0, 1, 2, 3, 4]);
+  assert.deepEqual(inner.map((step) => step.params.index), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  for (const step of inner.filter((entry) => entry.params.index >= 5)) {
+    assert.deepEqual(step.params.params.color, { space: "rgb", r: 1, g: 1, b: 1 }, "light ramp uses the lighting colour");
+    assert.equal(step.params.params.angle, 150, "lighting ramp uses the light dial side");
+  }
+  for (const step of inner.filter((entry) => entry.params.index < 5)) {
+    assert.equal(step.params.params.color.r, 0, "dark ramp uses the shadow colour");
+    assert.equal(step.params.params.angle, 330, "dark ramp sits opposite the light");
+  }
+  assert.equal(api.layer.dropShadows.length, 5);
+  assert.equal(api.layer.innerShadows.length, 10);
+});
+
+test("switching from 3D to drop removes the inner ramps in the same batch", async () => {
+  const api = fakeApi();
+  await Shadow.applyLayerStyles(api, { documentId: "doc-1", layerId: "src", params: { kind: "3dShadow" } });
+  api.calls.length = 0;
+  await Shadow.applyLayerStyles(api, {
+    documentId: "doc-1",
+    layerId: "src",
+    params: { kind: "dropShadow" },
+    previousKind: "3dShadow",
+  });
+
+  const batch = api.calls.find((call) => call.operation === "batch");
+  const removed = batch.params.steps.filter((step) => step.params.params.present === false);
+  assert.equal(removed.length, 10, "dark and light inner ramps are removed");
+  assert.equal(api.layer.innerShadows.filter((effect) => effect.present === false).length, 10);
+  assert.equal(api.layer.dropShadows.filter((effect) => effect.present === false).length, 0);
+});
+
+test("disableLayerShadows removes all three 3D ramps", async () => {
+  const api = fakeApi();
+  await Shadow.applyLayerStyles(api, { documentId: "doc-1", layerId: "src", params: { kind: "3dShadow" } });
+  await Shadow.disableLayerShadows(api, { documentId: "doc-1", layerId: "src", kind: "3dShadow" });
+  assert.equal(api.layer.dropShadows.filter((effect) => effect.present === false).length, 5);
+  assert.equal(api.layer.innerShadows.filter((effect) => effect.present === false).length, 10);
+});
+
 test("disableLayerShadows removes the five effects from the layer list", async () => {
   const api = fakeApi();
   await Shadow.applyLayerStyles(api, { documentId: "doc-1", layerId: "src", params: { kind: "dropShadow" } });

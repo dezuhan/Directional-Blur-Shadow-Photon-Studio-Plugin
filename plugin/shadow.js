@@ -36,7 +36,23 @@
     blend: "normal",
   };
 
-  const KINDS = ["dropShadow", "innerShadow"];
+  const KINDS = ["dropShadow", "innerShadow", "3dShadow"];
+  const DEFAULT_LIGHTING = "#ffffff";
+  /**
+   * Effect groups per mode. A group is a five-step ramp written at a fixed index offset so a
+   * re-apply patches the same slots; 3D shadow combines a drop ramp, a dark inner ramp on the
+   * shadow side and a light inner ramp on the light side.
+   */
+  const GROUP_LAYOUT = {
+    dropShadow: [{ kind: "dropShadow", offset: 0, role: "shadow", angleOffset: 0 }],
+    innerShadow: [{ kind: "innerShadow", offset: 0, role: "shadow", angleOffset: 0 }],
+    "3dShadow": [
+      { kind: "dropShadow", offset: 0, role: "shadow", angleOffset: 0 },
+      // the dark bevel sits on the far side of the light, the highlight on the near side
+      { kind: "innerShadow", offset: 0, role: "shadow", angleOffset: 180 },
+      { kind: "innerShadow", offset: 5, role: "light", angleOffset: 0 },
+    ],
+  };
   const BLEND_MODES = [
     "normal",
     "dissolve",
@@ -329,33 +345,78 @@
 
   /* ------------------------------------------------------------------ layer effects */
 
+  /** Group descriptors for one mode, with the angle and colour each ramp uses. */
+  function effectGroups(kind, params, lightingColour) {
+    const lighting = /^#[0-9a-f]{6}$/i.test(String(lightingColour || "")) ? lightingColour : DEFAULT_LIGHTING;
+    return (GROUP_LAYOUT[kind] || GROUP_LAYOUT.dropShadow).map((group) => ({
+      ...group,
+      colour: group.role === "light" ? lighting : params.colour,
+      angle: (((Number(params.angle) + (group.angleOffset || 0)) % 360) + 360) % 360,
+    }));
+  }
+
+  function disableStepsFor(layerId, group) {
+    const steps = [];
+    for (let index = 0; index < STEPS; index += 1) {
+      steps.push({
+        operation: "layer.effect.set",
+        params: {
+          layerIds: [layerId],
+          kind: group.kind,
+          index: group.offset + index,
+          params: { enabled: false, present: false },
+        },
+      });
+    }
+    return steps;
+  }
+
   /**
-   * Write the five shadows of one kind onto the selected layer.
+   * Write the ramps the mode needs onto the selected layer.
    *
-   * `layer.effect.set` keeps every other effect, and index 0-4 patches that kind in place or
-   * appends when the array is shorter, so re-applying never stacks a second copy. The five calls
-   * share one batch, which is one undo step.
+   * `layer.effect.set` keeps every other effect, and each group owns fixed index slots, so a
+   * re-apply patches the same five effects instead of stacking. When the mode changes, the groups
+   * of the previous mode are removed in the same batch, which stays a single undo step.
    */
   async function applyLayerStyles(api, options) {
     const documentId = options.documentId;
     const layerId = options.layerId;
     const plan = planLayers(options.params);
     const kind = plan.params.kind;
+    const groups = effectGroups(kind, plan.params, options.lightingColour);
+    const steps = [];
 
-    let described = null;
-    try {
-      described = await execute(api, documentId, "effect.describe", { kind });
-    } catch {
-      described = null;
+    if (options.previousKind && options.previousKind !== kind) {
+      const keep = new Set(groups.map((group) => group.kind + ":" + group.offset));
+      for (const group of effectGroups(options.previousKind, plan.params, options.lightingColour)) {
+        if (!keep.has(group.kind + ":" + group.offset)) steps.push(...disableStepsFor(layerId, group));
+      }
     }
 
-    const payloads = plan.layers.map((entry) =>
-      effectParams(described, { distance: entry.distance, blur: entry.blur, opacity: entry.opacity }, plan.params),
-    );
-    const steps = payloads.map((params, index) => ({
-      operation: "layer.effect.set",
-      params: { layerIds: [layerId], kind, index, params },
-    }));
+    const describedByKind = new Map();
+    let effects = 0;
+    for (const group of groups) {
+      let described = describedByKind.get(group.kind);
+      if (described === undefined) {
+        try {
+          described = await execute(api, documentId, "effect.describe", { kind: group.kind });
+        } catch {
+          described = null;
+        }
+        describedByKind.set(group.kind, described);
+      }
+      const groupPlan = planLayers({ ...plan.params, kind: group.kind, angle: group.angle, colour: group.colour });
+      const payloads = groupPlan.layers.map((entry) =>
+        effectParams(described, { distance: entry.distance, blur: entry.blur, opacity: entry.opacity }, groupPlan.params),
+      );
+      payloads.forEach((params, index) => {
+        steps.push({
+          operation: "layer.effect.set",
+          params: { layerIds: [layerId], kind: group.kind, index: group.offset + index, params },
+        });
+      });
+      effects += payloads.length;
+    }
 
     let revision;
     try {
@@ -366,22 +427,19 @@
     }
 
     await batch(api, documentId, "Plugin: " + kind, steps, revision);
-    return { layerIds: [layerId], kind, effects: payloads.length, payloads };
+    return { layerIds: [layerId], kind, effects, lightingColour: options.lightingColour || DEFAULT_LIGHTING };
   }
 
   /**
-   * Remove the five shadows of one kind from the layer list. The plugin API has no single-effect
-   * delete, so this clears the `present` and `enabled` flags: Photon drops the effects from the
-   * Layers panel and the render, and a later apply patches them back on.
+   * Remove the ramps of one mode from the layer list. The plugin API has no single-effect delete,
+   * so this clears `present` and `enabled`: Photon drops the effects from the Layers panel and the
+   * render, and a later apply patches them back on.
    */
   async function disableLayerShadows(api, options) {
+    const plan = planLayers(options.params || {});
+    const groups = effectGroups(options.kind || plan.params.kind, plan.params, options.lightingColour);
     const steps = [];
-    for (let index = 0; index < STEPS; index += 1) {
-      steps.push({
-        operation: "layer.effect.set",
-        params: { layerIds: [options.layerId], kind: options.kind, index, params: { enabled: false, present: false } },
-      });
-    }
+    for (const group of groups) steps.push(...disableStepsFor(options.layerId, group));
 
     let revision;
     try {
@@ -391,13 +449,15 @@
       revision = undefined;
     }
 
-    await batch(api, options.documentId, "Plugin: hide shadows", steps, revision);
+    await batch(api, options.documentId, "Plugin: remove shadows", steps, revision);
   }
 
   return {
     DEFAULTS,
+    DEFAULT_LIGHTING,
     STEPS,
     KINDS,
+    GROUP_LAYOUT,
     BLEND_MODES,
     DISTANCE_FACTORS,
     BLUR_FACTORS,
@@ -410,6 +470,7 @@
     execute,
     describeToMap,
     effectParams,
+    effectGroups,
     effectAngle,
     vectorToAngleDistance,
     applyLayerStyles,

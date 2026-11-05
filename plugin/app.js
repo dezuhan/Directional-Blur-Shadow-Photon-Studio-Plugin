@@ -38,6 +38,8 @@ const el = {
   previewCanvas: document.getElementById("previewCanvas"),
   swatchBtn: document.getElementById("swatchBtn"),
   swatchDot: document.getElementById("swatchDot"),
+  lightSwatchBtn: document.getElementById("lightSwatchBtn"),
+  lightSwatchDot: document.getElementById("lightSwatchDot"),
   picker: document.getElementById("picker"),
   svCanvas: document.getElementById("svCanvas"),
   hueCanvas: document.getElementById("hueCanvas"),
@@ -54,6 +56,7 @@ let drawFrame = null;
 let lastParams = { ...Shadow.DEFAULTS };
 let hsv = { h: 0, s: 0, v: 0 };
 let objectColour = "#f7f7f7";
+let lightingColour = Shadow ? Shadow.DEFAULT_LIGHTING : "#ffffff";
 
 function badge(text, kind) {
   el.badge.textContent = text;
@@ -280,13 +283,34 @@ function drawPreview() {
   }
   const params = readParams();
   const plan = Shadow.planLayers(params);
-  const isInner = plan.params.kind === "innerShadow";
+  const isInnerOnly = plan.params.kind === "innerShadow";
+  const is3d = plan.params.kind === "3dShadow";
   const centre = canvasCentre();
   const card = cardRect();
   const hex = params.colour.replace("#", "");
   const red = parseInt(hex.slice(0, 2), 16);
   const green = parseInt(hex.slice(2, 4), 16);
   const blue = parseInt(hex.slice(4, 6), 16);
+
+  function drawInnerRamp(innerParams, colourValue) {
+    const innerPlan = Shadow.planLayers(innerParams);
+    const rgb = Colour.hexToRgb(colourValue);
+    ctx.save();
+    roundRect(ctx, card.x, card.y, card.width, card.height, 10);
+    ctx.clip();
+    for (const layer of innerPlan.layers) {
+      ctx.save();
+      ctx.globalCompositeOperation = previewBlend(innerPlan.params.blend);
+      ctx.filter = "blur(" + Math.max(0.5, layer.blur * SCALE) + "px)";
+      ctx.lineWidth = Math.max(1.5, layer.blur * SCALE * 1.2);
+      ctx.strokeStyle =
+        "rgba(" + rgb.r + "," + rgb.g + "," + rgb.b + "," + Math.min(1, layer.opacity * 0.55).toFixed(3) + ")";
+      roundRect(ctx, card.x + layer.dx * SCALE, card.y + layer.dy * SCALE, card.width, card.height, 10);
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.restore();
+  }
 
   // light "paper" so a dark shadow is visible on the near-black panel
   ctx.save();
@@ -297,20 +321,20 @@ function drawPreview() {
   ctx.strokeRect(0.5, 0.5, canvas.width - 1, canvas.height - 1);
   ctx.restore();
 
-  if (!isInner) {
+  if (!isInnerOnly) {
     for (const layer of plan.layers) {
       ctx.save();
       ctx.globalCompositeOperation = previewBlend(params.blend);
       ctx.filter = "blur(" + Math.max(0.5, layer.blur * SCALE) + "px)";
-    ctx.fillStyle = "rgba(" + red + "," + green + "," + blue + "," + Math.min(1, layer.opacity).toFixed(3) + ")";
-    roundRect(
-      ctx,
-      card.x + layer.dx * SCALE,
-      card.y + layer.dy * SCALE,
-      card.width,
-      card.height,
-      10,
-    );
+      ctx.fillStyle = "rgba(" + red + "," + green + "," + blue + "," + Math.min(1, layer.opacity).toFixed(3) + ")";
+      roundRect(
+        ctx,
+        card.x + layer.dx * SCALE,
+        card.y + layer.dy * SCALE,
+        card.width,
+        card.height,
+        10,
+      );
       ctx.fill();
       ctx.restore();
     }
@@ -327,30 +351,20 @@ function drawPreview() {
   ctx.stroke();
   ctx.restore();
 
-  if (isInner) {
+  if (isInnerOnly) {
     // inner shadow: a soft edge band inside the card, offset against the light
-    ctx.save();
-    roundRect(ctx, card.x, card.y, card.width, card.height, 10);
-    ctx.clip();
-    for (const layer of plan.layers) {
-      ctx.save();
-      ctx.globalCompositeOperation = previewBlend(params.blend);
-      ctx.filter = "blur(" + Math.max(0.5, layer.blur * SCALE) + "px)";
-      ctx.lineWidth = Math.max(1.5, layer.blur * SCALE * 1.2);
-      ctx.strokeStyle =
-        "rgba(" + red + "," + green + "," + blue + "," + Math.min(1, layer.opacity * 0.55).toFixed(3) + ")";
-      roundRect(
-        ctx,
-        card.x + layer.dx * SCALE,
-        card.y + layer.dy * SCALE,
-        card.width,
-        card.height,
-        10,
-      );
-      ctx.stroke();
-      ctx.restore();
-    }
-    ctx.restore();
+    drawInnerRamp(params, params.colour);
+  }
+
+  if (is3d) {
+    // dark bevel on the shadow side, light bevel on the light side
+    const darkParams = Shadow.normalise({
+      ...params,
+      kind: "innerShadow",
+      angle: (params.angle + 180) % 360,
+    });
+    drawInnerRamp(darkParams, params.colour);
+    drawInnerRamp(params, lightingColour);
   }
 
   // light handle: the sun sits opposite the shadow. Distance 300 px maps to 126 canvas px
@@ -452,12 +466,14 @@ let pickerBefore = null;
 function syncSwatches() {
   el.swatchDot.style.background = el.colour.value;
   el.cardSwatchDot.style.background = objectColour;
+  el.lightSwatchDot.style.background = lightingColour;
 }
 
 function setColour(hex, options) {
   const normalised = Colour.normaliseHex(hex);
   if (!normalised) return;
   if (pickerTarget === "card") objectColour = normalised;
+  else if (pickerTarget === "lighting") lightingColour = normalised;
   else el.colour.value = normalised;
   syncSwatches();
   if (el.hexInput !== document.activeElement) el.hexInput.value = normalised;
@@ -549,10 +565,12 @@ function pickFromHue(event) {
 }
 
 function openPicker(target) {
-  pickerTarget = target === "card" ? "card" : "shadow";
-  pickerBefore = pickerTarget === "card" ? objectColour : el.colour.value;
-  el.pickerTitle.textContent = pickerTarget === "card" ? "Box colour" : "Shadow colour";
-  const current = Colour.normaliseHex(pickerTarget === "card" ? objectColour : el.colour.value) || "#000000";
+  pickerTarget = target === "card" ? "card" : target === "lighting" ? "lighting" : "shadow";
+  pickerBefore =
+    pickerTarget === "card" ? objectColour : pickerTarget === "lighting" ? lightingColour : el.colour.value;
+  el.pickerTitle.textContent =
+    pickerTarget === "card" ? "Box colour" : pickerTarget === "lighting" ? "Lighting colour" : "Shadow colour";
+  const current = Colour.normaliseHex(pickerBefore) || "#000000";
   hsv = Colour.rgbToHsv(Colour.hexToRgb(current));
   if (el.hexInput !== document.activeElement) el.hexInput.value = current;
   // Unhide first: the canvases now size their backing store from the visible CSS box.
@@ -571,9 +589,12 @@ function wireColourPicker() {
   };
   el.swatchBtn.addEventListener("click", () => toggle("shadow"));
   el.cardSwatchBtn.addEventListener("click", () => toggle("card"));
+  el.lightSwatchBtn.addEventListener("click", () => toggle("lighting"));
   el.colourOk.addEventListener("click", closePicker);
   el.colourCancel.addEventListener("click", () => {
-    setColour(pickerBefore || (pickerTarget === "card" ? "#f7f7f7" : Shadow.DEFAULTS.colour));
+    const fallback =
+      pickerTarget === "card" ? "#f7f7f7" : pickerTarget === "lighting" ? Shadow.DEFAULT_LIGHTING : Shadow.DEFAULTS.colour;
+    setColour(pickerBefore || fallback);
     closePicker();
   });
   el.hexInput.addEventListener("input", () => setColour(el.hexInput.value));
@@ -611,11 +632,19 @@ function oppositeKind(kind) {
 }
 
 function kindLabel(kind) {
+  if (kind === "3dShadow") return "3D";
   return kind === "innerShadow" ? "inner" : "drop";
 }
 
 /** The + button adds the shadow type that is not selected, so a layer can keep both. */
 function updateAddLabel() {
+  if (el.kind.value === "3dShadow") {
+    el.addShadow.disabled = true;
+    el.addShadow.title = "3D shadow already combines drop and inner shadows";
+    el.addShadow.setAttribute("aria-label", "3D shadow already combines drop and inner shadows");
+    return;
+  }
+  el.addShadow.disabled = false;
   const target = oppositeKind(el.kind.value);
   const label = target === "innerShadow" ? "inner shadow" : "drop shadow";
   el.addShadow.title = "Add " + label + " to the selected layer; the current type stays";
@@ -629,10 +658,13 @@ async function build() {
     documentId: doc.id,
     layerId,
     params: lastParams,
+    lightingColour,
+    // only clean up the old mode when it wrote to this same layer
+    previousKind: preview && preview.layerIds[0] === layerId ? preview.kind : null,
   });
   const elapsed = Math.round(performance.now() - startedAt);
   // kept for debugging when a host ignores a parameter: visible in the plugin console
-  console.debug("[directional-shadow]", result.kind, result.payloads[0]);
+  console.debug("[directional-shadow]", result.kind, result.effects + " effects");
   preview = result;
   markPreview();
   updateAddLabel();
@@ -646,9 +678,9 @@ async function runApply() {
   badge("Working…", "busy");
   try {
     lastParams = readParams();
-    setStatus("adding " + Shadow.STEPS + " shadows…");
+    setStatus("adding shadows…");
     await build();
-    await api.settings.set({ shadow: lastParams, preview: { objectColour } }).catch(() => {});
+    await api.settings.set({ shadow: lastParams, preview: { objectColour, lightingColour } }).catch(() => {});
     badge("Applied", "ok");
     setStatus(kindLabel(lastParams.kind) + " shadow applied to the selected layer");
   } catch (error) {
@@ -661,7 +693,7 @@ async function runApply() {
 }
 
 async function runAddShadow() {
-  if (busy) return;
+  if (busy || el.kind.value === "3dShadow") return;
   const previousKind = el.kind.value;
   const target = oppositeKind(previousKind);
   setBusy(true);
@@ -674,7 +706,7 @@ async function runAddShadow() {
     lastParams = readParams();
     setStatus("adding " + Shadow.STEPS + " " + kindLabel(target) + " shadows…");
     await build();
-    await api.settings.set({ shadow: lastParams, preview: { objectColour } }).catch(() => {});
+    await api.settings.set({ shadow: lastParams, preview: { objectColour, lightingColour } }).catch(() => {});
     badge("Applied", "ok");
     setStatus(kindLabel(target) + " shadow added; the " + kindLabel(previousKind) + " shadow stays");
     addDetail("added " + target + " shadows beside the existing " + previousKind + " shadows");
@@ -779,10 +811,13 @@ async function init() {
   updateAddLabel();
   const rememberedCard = stored.preview && Colour.normaliseHex(stored.preview.objectColour);
   objectColour = rememberedCard || "#f7f7f7";
+  const rememberedLighting = stored.preview && Colour.normaliseHex(stored.preview.lightingColour);
+  lightingColour = rememberedLighting || Shadow.DEFAULT_LIGHTING;
   setColour(el.colour.value, { quiet: true });
+  syncSwatches();
   badge("Ready", "ok");
-  setStatus("drag the light, then Preview");
-  addDetail("panel ready · v0.20.1");
+  setStatus("drag the light, then Apply");
+  addDetail("panel ready · v0.21.0");
   await refreshSelection();
   setInterval(refreshSelection, 2000);
   drawPreview();

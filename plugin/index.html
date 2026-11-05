@@ -27,6 +27,7 @@
             <select id="kind" aria-label="Shadow type">
               <option value="dropShadow" selected>Drop shadow</option>
               <option value="innerShadow">Inner shadow</option>
+              <option value="3dShadow">3D shadow</option>
             </select>
             <span class="chevron" aria-hidden="true"></span>
           </span>
@@ -97,6 +98,9 @@
         <button id="swatchBtn" class="swatch" type="button" title="Shadow colour">
           <span id="swatchDot" class="swatch-dot"></span>
         </button>
+        <button id="lightSwatchBtn" class="swatch lighting" type="button" title="Lighting colour">
+          <span id="lightSwatchDot" class="swatch-dot"></span>
+        </button>
         <input id="colour" type="color" value="#000000" hidden />
         <button id="apply" class="button primary" type="button">Apply</button>
       </div>
@@ -122,7 +126,7 @@
 
 
       <footer class="panel-footer">
-        <span id="version">v0.20.1</span>
+        <span id="version">v0.21.0</span>
         <div class="footer-actions">
           <button id="detailsBtn" class="link-button" type="button">Details</button>
           <button id="serviceBtn" class="link-button" type="button">Check service</button>
