@@ -1,9 +1,9 @@
 /*
  * Directional Shadow — Photon plugin.
  *
- * Adds N layer styles to the SELECTED layer (no duplicate) through one `layer.effects.set` call,
- * merging the layer's existing styles so nothing the user made is lost. The styles are snapshotted
- * first, so a preview can be reverted with `restoreLayerStyles`.
+ * Adds five typed layer effects to the SELECTED layer with one batched `layer.effect.set` per step.
+ * `layer.effect.set` adds or patches a single effect and leaves every other effect on the layer
+ * alone, so drop shadow and inner shadow can coexist on the same layer.
  *
  * Five fixed steps, modelled on the Figma "Beautiful Shadows" plugin:
  *   offset  = distance × [1, .64, .36, .16, .04]
@@ -14,8 +14,8 @@
  * Photon's shadow angle is the LIGHT direction on a Photoshop dial (0° right, 90° up), so a shadow
  * pointing at θ needs light = 180 − θ.
  *
- * Both drop shadow and inner shadow are supported; the host stores them in `styles.dropShadows` and
- * `styles.innerShadows` respectively.
+ * Both drop shadow and inner shadow are supported; each write works on its own effect array, so
+ * applying one never removes the other.
  *
  * Pure maths and an injected `api` keep this testable in Node.
  */
@@ -115,19 +115,39 @@
     return { params, layers, direction: { nx, ny, angleRad } };
   }
 
-  function rgba(hex, alpha) {
+  /** Hex → typed effect colour (0-1 channels, no alpha; opacity is its own field). */
+  function effectColour(hex) {
     const value = String(hex || "#000000").replace("#", "");
     return {
       space: "rgb",
       r: parseInt(value.slice(0, 2), 16) / 255,
       g: parseInt(value.slice(2, 4), 16) / 255,
       b: parseInt(value.slice(4, 6), 16) / 255,
-      a: alpha === undefined ? 1 : clamp(alpha, 0, 1),
     };
+  }
+
+  /** CSS-style blend name ("soft-light") → the effect schema's camelCase ("softLight"). */
+  function effectBlend(name) {
+    const value = String(name || "normal");
+    if (!value.includes("-")) return value;
+    return value
+      .split("-")
+      .map((part, index) => (index === 0 ? part : part.charAt(0).toUpperCase() + part.slice(1)))
+      .join("");
   }
 
   async function execute(api, documentId, operation, params) {
     return api.documents.execute(operation, params, documentId);
+  }
+
+  /** One undoable batch when the SDK has it, sequential operations otherwise. */
+  async function batch(api, documentId, label, steps, revision) {
+    if (typeof api.documents.batch === "function") {
+      return api.documents.batch(documentId, label, steps, revision);
+    }
+    const output = [];
+    for (const step of steps) output.push(await execute(api, documentId, step.operation, step.params));
+    return output;
   }
 
   /* ------------------------------------------------------------------ effect description */
@@ -166,6 +186,24 @@
   /** Normalise effect.describe(kind) into name → metadata, whatever the wrapper looks like. */
   function describeToMap(described) {
     const map = new Map();
+
+    // The live host returns { kind, parameters: { properties }, defaults }; use it directly so the
+    // colour object is read as one parameter instead of being flattened into its rgb channels.
+    const properties = described && described.parameters && described.parameters.properties;
+    if (properties && typeof properties === "object" && !Array.isArray(properties)) {
+      const defaults = described.defaults && typeof described.defaults === "object" ? described.defaults : {};
+      for (const [name, schema] of Object.entries(properties)) {
+        map.set(String(name).toLowerCase(), {
+          name,
+          value: Object.prototype.hasOwnProperty.call(defaults, name) ? defaults[name] : schema && schema.default,
+          type: schema && schema.type,
+        });
+      }
+      for (const [name, value] of Object.entries(defaults)) {
+        if (!map.has(String(name).toLowerCase())) map.set(String(name).toLowerCase(), { name, value });
+      }
+      return map;
+    }
 
     const addDescriptor = (entry) => {
       const name = entry.name || entry.key || entry.id || entry.param;
@@ -238,29 +276,11 @@
     };
   }
 
-  function colourValue(hex, format) {
-    const bare = String(hex).replace("#", "").toUpperCase();
-    if (format === "hex") return "#" + bare;
-    if (format === "hex-bare") return bare;
-    const rgb = rgba(hex);
-    if (format === "rgb255") {
-      // PSD layer-style colour: 0-255 integers, which is how a Photoshop-family document stores it
-      return {
-        r: Math.round(rgb.r * 255),
-        g: Math.round(rgb.g * 255),
-        b: Math.round(rgb.b * 255),
-        a: 255,
-      };
-    }
-    return rgb;
-  }
-
   /**
-   * Build one effect payload. Only parameter names listed by `effect.describe` are sent, units follow
-   * the host's own defaults, and the colour encoding is chosen by the caller because Photon does not
-   * document which one a layer style stores.
+   * Build one typed effect payload. Only parameter names listed by `effect.describe` are sent,
+   * so a host that renames a field still gets a valid object.
    */
-  function effectParams(described, entry, params, options) {
+  function effectParams(described, entry, params) {
     const map = describeToMap(described);
     if (map.size === 0) {
       const error = new Error("effect.describe returned nothing, so the shadow parameters are unknown");
@@ -268,7 +288,6 @@
       throw error;
     }
 
-    const format = (options && options.colourFormat) || "rgb";
     const distance = entry.distance !== undefined ? entry.distance : Math.hypot(entry.dx || 0, entry.dy || 0);
     const blur = Math.max(0.1, entry.blur);
     const wantOpacity = clamp(entry.opacity, 0, 1);
@@ -277,140 +296,49 @@
 
     const angleName = find([/angle/, /direction/, /rotation/]);
     const distanceName = find([/distance/, /offset(?!x|y)/]);
-    const xName = find([/^(x|posx|positionx|offsetx)$/]);
-    const yName = find([/^(y|posy|positiony|offsety)$/]);
     const sizeName = find([/blur/, /radius/, /softness/, /^size$/]);
     const opacityName = find([/opacity/, /alpha/, /transparency/]);
     const colourName = find([/colou?r/, /tint/]);
     const blendName = find([/blend/, /^mode$/]);
     const spreadName = find([/spread/]);
     const globalName = find([/use.*global/]);
+    const enabledName = find([/^enabled$/]);
 
-    const angleRad = (params.angle * Math.PI) / 180;
-    if (xName) out[xName] = Math.cos(angleRad) * distance;
-    if (yName) out[yName] = Math.sin(angleRad) * distance;
     if (distanceName) out[distanceName] = distance;
     if (angleName) out[angleName] = effectAngle(params.angle);
     if (sizeName) out[sizeName] = blur;
     if (spreadName) out[spreadName] = 0;
     if (globalName) out[globalName] = false;
+    if (enabledName) out[enabledName] = true;
 
     if (opacityName) {
       const meta = map.get(opacityName.toLowerCase());
       const defaultValue = meta && typeof meta.value === "number" ? meta.value : 1;
       out[opacityName] = defaultValue > 1 ? wantOpacity * 100 : wantOpacity;
     }
-    if (colourName) {
-      out[colourName] = colourValue(params.colour, format);
-    } else {
-      // effect.describe may list only the numeric parameters; the colour still has to reach the
-      // style, so fall back to the documented Photoshop key and let the format loop try each shape.
-      out.color = colourValue(params.colour, format);
-    }
+    if (colourName) out[colourName] = effectColour(params.colour);
     if (blendName) {
       const meta = map.get(blendName.toLowerCase());
-      out[blendName] = params.blend || (typeof meta.value === "string" ? meta.value : "normal");
+      out[blendName] = effectBlend(params.blend || (typeof meta.value === "string" ? meta.value : "normal"));
     }
 
     return out;
   }
 
-  /* ------------------------------------------------------------------ layer styles */
-
-  /** Documented shape of a layer-styles object (see layer.effects.set). */
-  function emptyStyles() {
-    return {
-      enabled: true,
-      scale: 1,
-      strokes: [],
-      innerShadows: [],
-      colorOverlays: [],
-      gradientOverlays: [],
-      patternOverlays: [],
-      dropShadows: [],
-    };
-  }
-
-  function stylesFromLayer(layer) {
-    if (!layer) return null;
-    const source = layer.styles || layer.effects || layer.layerEffects || layer.layerStyle || null;
-    if (!source || typeof source !== "object") return null;
-    if (!Array.isArray(source.dropShadows) && !Array.isArray(source.strokes)) return null;
-    return {
-      ...emptyStyles(),
-      ...source,
-      dropShadows: [...(source.dropShadows || [])],
-      innerShadows: [...(source.innerShadows || [])],
-    };
-  }
-
-  /** Find one layer inside an inspect snapshot, including layers nested in groups. */
-  function findLayerInSnapshot(node, layerId) {
-    if (!node) return null;
-    if (Array.isArray(node)) {
-      for (const item of node) {
-        const hit = findLayerInSnapshot(item, layerId);
-        if (hit) return hit;
-      }
-      return null;
-    }
-    if (typeof node !== "object") return null;
-    if (node.id === layerId) return node;
-    for (const key of ["layers", "children"]) {
-      if (node[key]) {
-        const hit = findLayerInSnapshot(node[key], layerId);
-        if (hit) return hit;
-      }
-    }
-    return null;
-  }
+  /* ------------------------------------------------------------------ layer effects */
 
   /**
-   * Read the real layer styles with the read-only `inspect` operation.
-   * `documents.active()` only returns layer ids and names, while `layer.effects.set`
-   * replaces the whole styles object, so this is the only way to keep the effects
-   * a layer already has and to take a snapshot that Remove shadows can restore.
-   */
-  async function readLayerStyles(api, documentId, layerId) {
-    try {
-      const snapshot = await execute(api, documentId, "inspect", {});
-      const documentNode = (snapshot && snapshot.document) || snapshot;
-      const layer = findLayerInSnapshot(documentNode && documentNode.layers, layerId);
-      return stylesFromLayer(layer);
-    } catch {
-      return null;
-    }
-  }
-
-  function sameColour(left, right) {
-    if (left && right && typeof left === "object" && typeof right === "object") {
-      const keys = ["r", "g", "b", "a"];
-      const scale = Math.max(left.r || 0, left.g || 0, left.b || 0, right.r || 0, right.g || 0, right.b || 0) > 1 ? 255 : 1;
-      return keys.every((key) => Math.abs((left[key] || 0) - (right[key] || 0)) <= scale / 128);
-    }
-    return String(left).replace("#", "").toUpperCase() === String(right).replace("#", "").toUpperCase();
-  }
-
-  /**
-   * Write the five shadows onto the SELECTED layer.
+   * Write the five shadows of one kind onto the selected layer.
    *
-   * `layer.effects.set` replaces the whole styles object, so the current styles are read first and
-   * merged: existing effects survive and the snapshot lets the caller undo a preview. Photon does not
-   * document the colour encoding, so the write is verified by reading the styles back and retrying
-   * with the next encoding when the colour did not take.
+   * `layer.effect.set` keeps every other effect, and index 0-4 patches that kind in place or
+   * appends when the array is shorter, so re-applying never stacks a second copy. The five calls
+   * share one batch, which is one undo step.
    */
   async function applyLayerStyles(api, options) {
     const documentId = options.documentId;
     const layerId = options.layerId;
     const plan = planLayers(options.params);
     const kind = plan.params.kind;
-    const key = kind === "innerShadow" ? "innerShadows" : "dropShadows";
-    const formats = ["rgb255", "rgb", "hex-bare", "hex"];
-
-    const doc = await api.documents.active();
-    const layer = (doc.layers || []).find((item) => item.id === layerId);
-    // active() does not expose styles, so inspect is the source of the real snapshot.
-    const stylesBefore = (await readLayerStyles(api, documentId, layerId)) || stylesFromLayer(layer);
 
     let described = null;
     try {
@@ -419,60 +347,48 @@
       described = null;
     }
 
-    const base = stylesBefore || emptyStyles();
-    let usedFormat = formats[0];
-    let payloads = [];
+    const payloads = plan.layers.map((entry) =>
+      effectParams(described, { distance: entry.distance, blur: entry.blur, opacity: entry.opacity }, plan.params),
+    );
+    const steps = payloads.map((params, index) => ({
+      operation: "layer.effect.set",
+      params: { layerIds: [layerId], kind, index, params },
+    }));
 
-    for (const format of formats) {
-      payloads = plan.layers.map((entry) =>
-        effectParams(
-          described,
-          { distance: entry.distance, blur: entry.blur, opacity: entry.opacity },
-          plan.params,
-          { colourFormat: format },
-        ),
-      );
-      const styles = { ...base, [key]: [...(base[key] || []), ...payloads] };
-      await execute(api, documentId, "layer.effects.set", { layerIds: [layerId], styles });
-      usedFormat = format;
-
-      let stored = null;
-      try {
-        stored = await readLayerStyles(api, documentId, layerId);
-      } catch {
-        stored = null;
-      }
-      if (!stored) break;
-      const colourKey = Object.keys(payloads[0]).find((name) => /colou?r|tint/i.test(name));
-      if (!colourKey) break;
-      const written = stored[key][stored[key].length - payloads.length];
-      if (!written) break;
-      if (sameColour(written[colourKey], payloads[0][colourKey])) break;
+    let revision;
+    try {
+      const doc = await api.documents.active();
+      revision = doc && doc.revision;
+    } catch {
+      revision = undefined;
     }
 
-    return {
-      layerIds: [layerId],
-      mode: "effects",
-      kind,
-      effects: payloads.length,
-      colourFormat: usedFormat,
-      payloads,
-      stylesBefore,
-      plan,
-    };
+    await batch(api, documentId, "Plugin: " + kind, steps, revision);
+    return { layerIds: [layerId], kind, effects: payloads.length, payloads };
   }
 
-  /** Undo a preview by writing the snapshot back. */
-  async function restoreLayerStyles(api, documentId, layerId, stylesBefore) {
-    try {
-      if (stylesBefore) {
-        await execute(api, documentId, "layer.effects.set", { layerIds: [layerId], styles: stylesBefore });
-      } else {
-        await execute(api, documentId, "layer.effects.clear", { layerIds: [layerId] });
-      }
-    } catch {
-      /* document closed or layer gone */
+  /**
+   * Hide the five shadows of one kind. The plugin API cannot delete a single effect, so this
+   * patches `enabled: false`; a later apply turns them back on.
+   */
+  async function disableLayerShadows(api, options) {
+    const steps = [];
+    for (let index = 0; index < STEPS; index += 1) {
+      steps.push({
+        operation: "layer.effect.set",
+        params: { layerIds: [options.layerId], kind: options.kind, index, params: { enabled: false } },
+      });
     }
+
+    let revision;
+    try {
+      const doc = await api.documents.active();
+      revision = doc && doc.revision;
+    } catch {
+      revision = undefined;
+    }
+
+    await batch(api, options.documentId, "Plugin: hide shadows", steps, revision);
   }
 
   return {
@@ -486,18 +402,14 @@
     clamp,
     normalise,
     planLayers,
-    rgba,
+    effectColour,
+    effectBlend,
     execute,
     describeToMap,
     effectParams,
     effectAngle,
     vectorToAngleDistance,
-    emptyStyles,
-    stylesFromLayer,
-    findLayerInSnapshot,
-    readLayerStyles,
-    sameColour,
     applyLayerStyles,
-    restoreLayerStyles,
+    disableLayerShadows,
   };
 });

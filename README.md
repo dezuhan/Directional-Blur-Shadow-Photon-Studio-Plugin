@@ -5,9 +5,9 @@
 Soft directional shadow for any layer, modelled on the Figma plugin **Beautiful Shadows** and the
 Affinity Photo macro *Directional Blur Shadow* (original concept by `rbonelli`).
 
-Apply adds **five cascaded layer styles** to the selected layer in one `layer.effects.set` call, so
-the result is a single undo step, stays editable in Photon's Layer Style panel, and never duplicates
-the layer.
+Apply adds **five cascaded layer effects** to the selected layer in one batched `layer.effect.set` per
+step, so the result is a single undo step, stays editable in Photon's Layer Style panel, and never
+duplicates the layer or touches its other effects.
 
 ## Screenshots
 
@@ -32,11 +32,11 @@ No service, no network, no dependencies.
 ## Use
 
 Drag the sun to aim the shadow (it falls on the opposite side), then press **Apply**.
-**Remove shadows** restores the styles from before the last Apply; applying again replaces the
-previous result instead of stacking. After an Apply, the **+** button beside **Remove shadows**
-adds another set to the currently selected layer without touching the previous layers or the
-shadows already on that layer, so you can build several sets or move across layers.
-Every write reads the layer's real styles first, so existing strokes, overlays and glows stay intact.
+**Apply** writes the five shadows of the selected **Type** and leaves every other effect on the layer
+alone, so applying again updates that type in place instead of stacking. The **+** button beside
+**Remove shadows** adds the other type: with Type set to Drop it adds an inner shadow, and with Type
+set to Inner it adds a drop shadow, so the same layer can keep both. **Remove shadows** hides the five
+shadows of the last written type; apply again to bring them back.
 
 | Field | Range | Default | Meaning |
 | --- | --- | --- | --- |
@@ -49,7 +49,7 @@ Every write reads the layer's real styles first, so existing strokes, overlays a
 | square swatch | custom picker | `#f7f7f7` | Preview box colour; also opens by clicking the white card |
 | round swatch | custom picker | black | Shadow colour |
 | white card | click | `#f7f7f7` | Opens the box-colour picker |
-| `+` button | click | hidden | Applies the current shadow to the selected layer without removing the previous shadows; appears after an Apply |
+| `+` button | click | always | Adds the shadow type that is not selected, so drop shadow and inner shadow can coexist on one layer |
 
 Five fixed steps (farthest → nearest). Offsets are `distance × 1 / .64 / .36 / .16 / .04`, opacities
 `lighting × 2 / 15 / 50 / 85 / 98 %`, and each shadow has its **own blur**:
@@ -62,19 +62,20 @@ pointing at θ is written as `180 − θ`.
 ## Testing
 
 ```powershell
-node tools/shadow-test.cjs     # 24 tests: presets, angle, payloads, styles, inspect snapshot
+node tools/shadow-test.cjs     # 17 tests: presets, angle, typed payloads, batched writes
 node tools/colour-test.cjs     # 6 tests: hex/rgb/hsv maths for the picker
 node tools/ui-check.cjs        # ids and el keys used by app.js exist in index.html
 node tools/bench.cjs           # operation counts and maths timings
 ```
 
-An Apply sends four operations: `documents.active` ×2, `effect.describe`, `layer.effects.set`.
+An Apply sends `documents.active`, `effect.describe`, then one batch of five `layer.effect.set`
+calls, one per shadow step.
 
 ## Limits
 
 - Use **Apply** to commit; the canvas preview is an approximation, not a render of the result.
-- Layer styles cannot be removed individually by the plugin API, so **Remove shadows** restores the
-  whole styles snapshot of the last Apply or **+**. The **+** button itself never restores the
-  previous layer, so build across layers first and undo only the last added set.
+- Photon has no operation that deletes a single layer effect, so **Remove shadows** sets the five
+  effects of the last written type to `enabled: false`. The effects stay in the Layer Style list and
+  applying again turns them back on. Only that type is hidden; the other shadow type stays visible.
 
 MIT licensed — see [LICENSE](LICENSE).

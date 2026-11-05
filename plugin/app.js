@@ -47,7 +47,7 @@ const el = {
 };
 
 let api = null;
-let preview = null; // { layerIds, effects, colourFormat, stylesBefore }
+let preview = null; // { layerIds, kind, effects, payloads } written by the last Apply or +
 let busy = false;
 let dragging = false;
 let drawFrame = null;
@@ -604,20 +604,22 @@ async function selectedLayer() {
 
 function markPreview() {
   el.removePreview.hidden = !preview;
-  el.addShadow.hidden = !preview;
 }
 
-async function dropPreview() {
-  if (!preview) return;
-  const current = preview;
-  preview = null;
-  try {
-    const doc = await api.documents.active();
-    if (doc) await Shadow.restoreLayerStyles(api, doc.id, current.layerIds[0], current.stylesBefore);
-  } catch {
-    /* document closed; nothing to clean */
-  }
-  markPreview();
+function oppositeKind(kind) {
+  return kind === "innerShadow" ? "dropShadow" : "innerShadow";
+}
+
+function kindLabel(kind) {
+  return kind === "innerShadow" ? "inner" : "drop";
+}
+
+/** The + button adds the shadow type that is not selected, so a layer can keep both. */
+function updateAddLabel() {
+  const target = oppositeKind(el.kind.value);
+  const label = target === "innerShadow" ? "inner shadow" : "drop shadow";
+  el.addShadow.title = "Add " + label + " to the selected layer; the current type stays";
+  el.addShadow.setAttribute("aria-label", "Add " + label + " to the selected layer");
 }
 
 async function build() {
@@ -630,11 +632,11 @@ async function build() {
   });
   const elapsed = Math.round(performance.now() - startedAt);
   // kept for debugging when a host ignores a parameter: visible in the plugin console
-  console.debug("[directional-shadow]", "format=" + result.colourFormat, result.payloads[0]);
+  console.debug("[directional-shadow]", result.kind, result.payloads[0]);
   preview = result;
   markPreview();
-  const label = result.kind === "innerShadow" ? "inner" : "drop";
-  el.meta.textContent = elapsed + " ms · " + result.effects + " " + label + " shadows · " + result.colourFormat;
+  updateAddLabel();
+  el.meta.textContent = elapsed + " ms · " + result.effects + " " + kindLabel(result.kind) + " shadows";
   return result;
 }
 
@@ -644,12 +646,11 @@ async function runApply() {
   badge("Working…", "busy");
   try {
     lastParams = readParams();
-    await dropPreview(); // a second Apply replaces the previous result instead of stacking
     setStatus("adding " + Shadow.STEPS + " shadows…");
     await build();
     await api.settings.set({ shadow: lastParams, preview: { objectColour } }).catch(() => {});
     badge("Applied", "ok");
-    setStatus("shadow applied to the selected layer");
+    setStatus(kindLabel(lastParams.kind) + " shadow applied to the selected layer");
   } catch (error) {
     badge("Failed", "danger");
     setStatus(errText(error));
@@ -660,23 +661,27 @@ async function runApply() {
 }
 
 async function runAddShadow() {
-  if (busy || !preview) return;
+  if (busy) return;
+  const previousKind = el.kind.value;
+  const target = oppositeKind(previousKind);
   setBusy(true);
   badge("Working…", "busy");
-  const previous = preview;
-  preview = null; // keep the written shadows; this Apply adds to the selected layer instead of replacing
-  markPreview();
   try {
+    // switch the panel to the other type, then write that type without touching the current one
+    el.kind.value = target;
+    if (typeof window.syncCustomSelects === "function") window.syncCustomSelects();
+    updateAddLabel();
     lastParams = readParams();
-    setStatus("adding " + Shadow.STEPS + " shadows…");
+    setStatus("adding " + Shadow.STEPS + " " + kindLabel(target) + " shadows…");
     await build();
     await api.settings.set({ shadow: lastParams, preview: { objectColour } }).catch(() => {});
     badge("Applied", "ok");
-    setStatus("shadow added; select another layer to add the next one");
-    addDetail("added shadows to the selected layer");
+    setStatus(kindLabel(target) + " shadow added; the " + kindLabel(previousKind) + " shadow stays");
+    addDetail("added " + target + " shadows beside the existing " + previousKind + " shadows");
   } catch (error) {
-    preview = previous;
-    markPreview();
+    el.kind.value = previousKind;
+    if (typeof window.syncCustomSelects === "function") window.syncCustomSelects();
+    updateAddLabel();
     badge("Failed", "danger");
     setStatus(errText(error));
     addDetail("add failed: " + errText(error));
@@ -686,12 +691,25 @@ async function runAddShadow() {
 }
 
 async function runRemovePreview() {
-  if (busy) return;
+  if (busy || !preview) return;
   setBusy(true);
   try {
-    await dropPreview();
+    const doc = await api.documents.active();
+    if (doc) {
+      await Shadow.disableLayerShadows(api, {
+        documentId: doc.id,
+        layerId: preview.layerIds[0],
+        kind: preview.kind,
+      });
+    }
+    preview = null;
+    markPreview();
     badge("Ready", "ok");
-    setStatus("preview removed");
+    setStatus("shadows hidden; apply again to bring them back");
+  } catch (error) {
+    badge("Failed", "danger");
+    setStatus(errText(error));
+    addDetail("remove failed: " + errText(error));
   } finally {
     setBusy(false);
   }
@@ -730,7 +748,10 @@ function wire() {
   for (const input of [el.angle, el.distance, el.soft, el.darkness, el.colour]) {
     input.addEventListener("input", () => scheduleDraw());
   }
-  el.kind.addEventListener("change", () => scheduleDraw());
+  el.kind.addEventListener("change", () => {
+    scheduleDraw();
+    updateAddLabel();
+  });
   el.blend.addEventListener("change", () => scheduleDraw());
   el.apply.addEventListener("click", () => void runApply());
   el.detailsBtn.addEventListener("click", openDetails);
@@ -753,12 +774,13 @@ async function init() {
     stored = {};
   }
   applyParamsToUi(Shadow.normalise({ ...Shadow.DEFAULTS, ...(stored.shadow || {}) }));
+  updateAddLabel();
   const rememberedCard = stored.preview && Colour.normaliseHex(stored.preview.objectColour);
   objectColour = rememberedCard || "#f7f7f7";
   setColour(el.colour.value, { quiet: true });
   badge("Ready", "ok");
   setStatus("drag the light, then Preview");
-  addDetail("panel ready · v0.19.1");
+  addDetail("panel ready · v0.20.0");
   await refreshSelection();
   setInterval(refreshSelection, 2000);
   drawPreview();
