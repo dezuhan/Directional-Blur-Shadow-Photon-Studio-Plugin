@@ -19,6 +19,11 @@ const el = {
   soft: document.getElementById("soft"),
   kind: document.getElementById("kind"),
   blend: document.getElementById("blend"),
+  blendSingle: document.getElementById("blendSingle"),
+  blend3d: document.getElementById("blend3d"),
+  blendLight: document.getElementById("blendLight"),
+  blendDrop: document.getElementById("blendDrop"),
+  blendInner: document.getElementById("blendInner"),
   cardSwatchBtn: document.getElementById("cardSwatchBtn"),
   cardSwatchDot: document.getElementById("cardSwatchDot"),
   pickerTitle: document.getElementById("pickerTitle"),
@@ -57,6 +62,8 @@ let lastParams = { ...Shadow.DEFAULTS };
 let hsv = { h: 0, s: 0, v: 0 };
 let objectColour = "#f7f7f7";
 let lightingColour = Shadow ? Shadow.DEFAULT_LIGHTING : "#ffffff";
+// 3D mode keeps one blend per bevel component; the 2D modes reuse the matching slot.
+let blends = { lighting: "normal", dropShadow: "normal", innerShadow: "normal" };
 
 function badge(text, kind) {
   el.badge.textContent = text;
@@ -292,7 +299,7 @@ function drawPreview() {
   const green = parseInt(hex.slice(2, 4), 16);
   const blue = parseInt(hex.slice(4, 6), 16);
 
-  function drawInnerRamp(innerParams, colourValue) {
+  function drawInnerRamp(innerParams, colourValue, blendValue) {
     const innerPlan = Shadow.planLayers(innerParams);
     const rgb = Colour.hexToRgb(colourValue);
     ctx.save();
@@ -300,7 +307,7 @@ function drawPreview() {
     ctx.clip();
     for (const layer of innerPlan.layers) {
       ctx.save();
-      ctx.globalCompositeOperation = previewBlend(innerPlan.params.blend);
+      ctx.globalCompositeOperation = previewBlend(blendValue);
       ctx.filter = "blur(" + Math.max(0.5, layer.blur * SCALE) + "px)";
       ctx.lineWidth = Math.max(1.5, layer.blur * SCALE * 1.2);
       ctx.strokeStyle =
@@ -324,7 +331,7 @@ function drawPreview() {
   if (!isInnerOnly) {
     for (const layer of plan.layers) {
       ctx.save();
-      ctx.globalCompositeOperation = previewBlend(params.blend);
+      ctx.globalCompositeOperation = previewBlend(is3d ? blends.dropShadow : params.blend);
       ctx.filter = "blur(" + Math.max(0.5, layer.blur * SCALE) + "px)";
       ctx.fillStyle = "rgba(" + red + "," + green + "," + blue + "," + Math.min(1, layer.opacity).toFixed(3) + ")";
       roundRect(
@@ -353,7 +360,7 @@ function drawPreview() {
 
   if (isInnerOnly) {
     // inner shadow: a soft edge band inside the card, offset against the light
-    drawInnerRamp(params, params.colour);
+    drawInnerRamp(params, params.colour, params.blend);
   }
 
   if (is3d) {
@@ -363,8 +370,8 @@ function drawPreview() {
       kind: "innerShadow",
       angle: (params.angle + 180) % 360,
     });
-    drawInnerRamp(darkParams, params.colour);
-    drawInnerRamp(params, lightingColour);
+    drawInnerRamp(darkParams, params.colour, blends.innerShadow);
+    drawInnerRamp(params, lightingColour, blends.lighting);
   }
 
   // light handle: the sun sits opposite the shadow. Distance 300 px maps to 126 canvas px
@@ -651,6 +658,35 @@ function updateAddLabel() {
   el.addShadow.setAttribute("aria-label", "Add " + label + " to the selected layer");
 }
 
+function validBlend(value) {
+  return Shadow.BLEND_MODES.includes(String(value)) ? String(value) : "normal";
+}
+
+function cloneBlendOptions(target) {
+  for (const option of Array.from(el.blend.options)) target.append(option.cloneNode(true));
+}
+
+/** 2D modes show one Blend row, 3D shows one row per bevel component. */
+function syncBlendUi() {
+  const is3d = el.kind.value === "3dShadow";
+  el.blendSingle.hidden = is3d;
+  el.blend3d.hidden = !is3d;
+  if (is3d) {
+    el.blendLight.value = blends.lighting;
+    el.blendDrop.value = blends.dropShadow;
+    el.blendInner.value = blends.innerShadow;
+  } else {
+    el.blend.value = blends[el.kind.value] || "normal";
+  }
+  if (typeof window.syncCustomSelects === "function") window.syncCustomSelects();
+}
+
+function activeBlends() {
+  return el.kind.value === "3dShadow"
+    ? { lighting: el.blendLight.value, dropShadow: el.blendDrop.value, innerShadow: el.blendInner.value }
+    : { ...blends, [el.kind.value]: el.blend.value };
+}
+
 async function build() {
   const { doc, layerId } = await selectedLayer();
   const startedAt = performance.now();
@@ -659,6 +695,7 @@ async function build() {
     layerId,
     params: lastParams,
     lightingColour,
+    blends: activeBlends(),
     // only clean up the old mode when it wrote to this same layer
     previousKind: preview && preview.layerIds[0] === layerId ? preview.kind : null,
   });
@@ -680,7 +717,7 @@ async function runApply() {
     lastParams = readParams();
     setStatus("adding shadows…");
     await build();
-    await api.settings.set({ shadow: lastParams, preview: { objectColour, lightingColour } }).catch(() => {});
+    await api.settings.set({ shadow: lastParams, blends, preview: { objectColour, lightingColour } }).catch(() => {});
     badge("Applied", "ok");
     setStatus(kindLabel(lastParams.kind) + " shadow applied to the selected layer");
   } catch (error) {
@@ -706,7 +743,7 @@ async function runAddShadow() {
     lastParams = readParams();
     setStatus("adding " + Shadow.STEPS + " " + kindLabel(target) + " shadows…");
     await build();
-    await api.settings.set({ shadow: lastParams, preview: { objectColour, lightingColour } }).catch(() => {});
+    await api.settings.set({ shadow: lastParams, blends, preview: { objectColour, lightingColour } }).catch(() => {});
     badge("Applied", "ok");
     setStatus(kindLabel(target) + " shadow added; the " + kindLabel(previousKind) + " shadow stays");
     addDetail("added " + target + " shadows beside the existing " + previousKind + " shadows");
@@ -785,8 +822,22 @@ function wire() {
   el.kind.addEventListener("change", () => {
     scheduleDraw();
     updateAddLabel();
+    syncBlendUi();
   });
-  el.blend.addEventListener("change", () => scheduleDraw());
+  el.blend.addEventListener("change", () => {
+    if (el.kind.value !== "3dShadow") blends[el.kind.value] = el.blend.value;
+    scheduleDraw();
+  });
+  for (const [select, key] of [
+    [el.blendLight, "lighting"],
+    [el.blendDrop, "dropShadow"],
+    [el.blendInner, "innerShadow"],
+  ]) {
+    select.addEventListener("change", () => {
+      blends[key] = select.value;
+      scheduleDraw();
+    });
+  }
   el.apply.addEventListener("click", () => void runApply());
   el.detailsBtn.addEventListener("click", openDetails);
   el.serviceBtn.addEventListener("click", () => void checkService());
@@ -807,7 +858,19 @@ async function init() {
   } catch {
     stored = {};
   }
-  applyParamsToUi(Shadow.normalise({ ...Shadow.DEFAULTS, ...(stored.shadow || {}) }));
+  const storedShadow = stored.shadow || {};
+  const storedBlends = stored.blends && typeof stored.blends === "object" ? stored.blends : {};
+  const legacyBlend = storedShadow.blend;
+  blends = {
+    lighting: validBlend(storedBlends.lighting || legacyBlend),
+    dropShadow: validBlend(storedBlends.dropShadow || legacyBlend),
+    innerShadow: validBlend(storedBlends.innerShadow || legacyBlend),
+  };
+  applyParamsToUi(Shadow.normalise({ ...Shadow.DEFAULTS, ...storedShadow }));
+  cloneBlendOptions(el.blendLight);
+  cloneBlendOptions(el.blendDrop);
+  cloneBlendOptions(el.blendInner);
+  syncBlendUi();
   updateAddLabel();
   const rememberedCard = stored.preview && Colour.normaliseHex(stored.preview.objectColour);
   objectColour = rememberedCard || "#f7f7f7";
@@ -817,7 +880,7 @@ async function init() {
   syncSwatches();
   badge("Ready", "ok");
   setStatus("drag the light, then Apply");
-  addDetail("panel ready · v0.21.0");
+  addDetail("panel ready · v0.22.0");
   await refreshSelection();
   setInterval(refreshSelection, 2000);
   drawPreview();

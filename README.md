@@ -40,8 +40,10 @@ Type set to Inner it adds a drop shadow, so the same layer can keep both.
 
 **3D shadow** writes three ramps in one Apply: a drop shadow, a dark inner shadow on the side away
 from the light, and a light inner shadow on the light side. The round swatch after the shadow swatch
-picks the **lighting colour** for that bevel; it is remembered with the other panel settings. The
-**+** button is disabled in 3D mode because both types are already part of it.
+picks the **lighting colour** for that bevel; it is remembered with the other panel settings. In 3D
+mode the single Blend row becomes three: **Blend L** for the lighting ramp, **Blend DS** for the drop
+shadow ramp and **Blend IS** for the inner bevel ramp. The **+** button is disabled in 3D mode because
+both types are already part of it.
 
 **Remove shadows** removes the ramps of the last written mode from the layer; applying again adds
 them back.
@@ -53,7 +55,10 @@ them back.
 | `Light %` | 1–100 | 100 | Scales every layer's opacity |
 | `Soft %` | 1–100 | 75 | Scales the blur of every step |
 | `Type` | Drop / Inner / 3D shadow | Drop | Which ramp set to write |
-| `Blend` | Photoshop blend list | Normal | Forwarded to the host when layer styles expose a blend parameter; the preview always shows it |
+| `Blend` | Photoshop blend list | Normal | 2D modes: blend of the selected shadow type |
+| `Blend L` | Photoshop blend list | Normal | 3D mode: blend of the lighting ramp |
+| `Blend DS` | Photoshop blend list | Normal | 3D mode: blend of the drop shadow ramp |
+| `Blend IS` | Photoshop blend list | Normal | 3D mode: blend of the inner shadow ramp |
 | square swatch | custom picker | `#f7f7f7` | Preview box colour; also opens by clicking the white card |
 | round swatch | custom picker | black | Shadow colour |
 | ringed round swatch | custom picker | white | Lighting colour for the 3D bevel |
@@ -71,7 +76,7 @@ pointing at θ is written as `180 − θ`.
 ## Testing
 
 ```powershell
-node tools/shadow-test.cjs     # 21 tests: presets, angles, typed payloads, 2D and 3D batches
+node tools/shadow-test.cjs     # 22 tests: presets, angles, typed payloads, 2D and 3D batches
 node tools/colour-test.cjs     # 6 tests: hex/rgb/hsv maths for the picker
 node tools/ui-check.cjs        # ids and el keys used by app.js exist in index.html
 node tools/bench.cjs           # operation counts and maths timings

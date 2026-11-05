@@ -805,6 +805,17 @@ select.input option {
   gap: 7px;
 }
 
+/* 3D mode: one blend control per bevel component (lighting, drop, inner). */
+#blend3d {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+#blend3d .mini {
+  flex: none;
+}
+
 .shadow-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

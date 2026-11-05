@@ -345,12 +345,19 @@
 
   /* ------------------------------------------------------------------ layer effects */
 
-  /** Group descriptors for one mode, with the angle and colour each ramp uses. */
-  function effectGroups(kind, params, lightingColour) {
+  /** Group descriptors for one mode, with the angle, colour and blend each ramp uses. */
+  function effectGroups(kind, params, lightingColour, blends) {
     const lighting = /^#[0-9a-f]{6}$/i.test(String(lightingColour || "")) ? lightingColour : DEFAULT_LIGHTING;
+    const modes = blends || {};
+    const blendFor = (group) => {
+      if (group.kind === "dropShadow") return modes.dropShadow || params.blend;
+      if (group.role === "light") return modes.lighting || params.blend;
+      return modes.innerShadow || params.blend;
+    };
     return (GROUP_LAYOUT[kind] || GROUP_LAYOUT.dropShadow).map((group) => ({
       ...group,
       colour: group.role === "light" ? lighting : params.colour,
+      blend: blendFor(group),
       angle: (((Number(params.angle) + (group.angleOffset || 0)) % 360) + 360) % 360,
     }));
   }
@@ -383,12 +390,12 @@
     const layerId = options.layerId;
     const plan = planLayers(options.params);
     const kind = plan.params.kind;
-    const groups = effectGroups(kind, plan.params, options.lightingColour);
+    const groups = effectGroups(kind, plan.params, options.lightingColour, options.blends);
     const steps = [];
 
     if (options.previousKind && options.previousKind !== kind) {
       const keep = new Set(groups.map((group) => group.kind + ":" + group.offset));
-      for (const group of effectGroups(options.previousKind, plan.params, options.lightingColour)) {
+      for (const group of effectGroups(options.previousKind, plan.params, options.lightingColour, options.blends)) {
         if (!keep.has(group.kind + ":" + group.offset)) steps.push(...disableStepsFor(layerId, group));
       }
     }
@@ -405,7 +412,13 @@
         }
         describedByKind.set(group.kind, described);
       }
-      const groupPlan = planLayers({ ...plan.params, kind: group.kind, angle: group.angle, colour: group.colour });
+      const groupPlan = planLayers({
+        ...plan.params,
+        kind: group.kind,
+        angle: group.angle,
+        colour: group.colour,
+        blend: group.blend,
+      });
       const payloads = groupPlan.layers.map((entry) =>
         effectParams(described, { distance: entry.distance, blur: entry.blur, opacity: entry.opacity }, groupPlan.params),
       );
